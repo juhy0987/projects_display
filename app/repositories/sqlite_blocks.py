@@ -8,7 +8,7 @@ from typing import Any
 
 from pydantic import TypeAdapter
 
-from app.models.blocks import Block, BlockDocument, ContainerBlock
+from app.models.blocks import Block, BlockDocument, ContainerBlock, PageBlock
 
 
 class SQLiteBlockRepository:
@@ -86,6 +86,10 @@ class SQLiteBlockRepository:
         (document_id,),
       ).fetchall()
 
+      doc_title_rows = conn.execute("SELECT id, title FROM documents").fetchall()
+
+    doc_titles: dict[str, str] = {row["id"]: row["title"] for row in doc_title_rows}
+
     children_by_parent: dict[str | None, list[dict[str, Any]]] = {}
     for row in block_rows:
       parent_key = row["parent_block_id"]
@@ -106,6 +110,12 @@ class SQLiteBlockRepository:
             "children": build_nodes(item["id"]),
           }
           nodes.append(ContainerBlock.model_validate(container_payload))
+        elif item["type"] == "page":
+          page_payload = {
+            **item,
+            "title": doc_titles.get(item.get("document_id", ""), "알 수 없는 문서"),
+          }
+          nodes.append(PageBlock.model_validate(page_payload))
         else:
           nodes.append(self._block_adapter.validate_python(item))
       return nodes
@@ -154,27 +164,32 @@ class SQLiteBlockRepository:
       if existing_count > 0:
         return
 
-      doc_id = "project-manager-intro"
-      conn.execute(
+      intro_id = "project-manager-intro"
+      stack_id = "tech-stack"
+
+      conn.executemany(
         "INSERT INTO documents(id, title, subtitle) VALUES (?, ?, ?)",
-        (doc_id, "Project Manager 소개", "블록 기반 프로젝트 관리 도구"),
+        [
+          (intro_id, "Project Manager 소개", "블록 기반 프로젝트 관리 도구"),
+          (stack_id, "기술 스택", "이 프로젝트에서 사용하는 기술 목록"),
+        ],
       )
 
+      # (block_id, document_id, parent_block_id, type, position, content)
       blocks = [
-        ("b-overview", doc_id, None, "container", 1, {"title": "개요", "layout": "vertical"}),
+        # ── intro document ──────────────────────────────────────────────────
+        ("b-overview", intro_id, None, "container", 1, {"title": "개요", "layout": "vertical"}),
         (
           "b-overview-text",
-          doc_id,
+          intro_id,
           "b-overview",
           "text",
           1,
-          {
-            "text": "Project Manager는 노션 스타일의 블록 인터페이스로 프로젝트와 문서를 관리하는 도구입니다.",
-          },
+          {"text": "Project Manager는 노션 스타일의 블록 인터페이스로 프로젝트와 문서를 관리하는 도구입니다."},
         ),
         (
           "b-overview-image",
-          doc_id,
+          intro_id,
           "b-overview",
           "image",
           2,
@@ -183,17 +198,10 @@ class SQLiteBlockRepository:
             "caption": "블록으로 구성하는 프로젝트 문서",
           },
         ),
-        (
-          "b-block-types",
-          doc_id,
-          None,
-          "container",
-          2,
-          {"title": "블록 타입", "layout": "grid"},
-        ),
+        ("b-block-types", intro_id, None, "container", 2, {"title": "블록 타입", "layout": "grid"}),
         (
           "b-block-text",
-          doc_id,
+          intro_id,
           "b-block-types",
           "text",
           1,
@@ -201,7 +209,7 @@ class SQLiteBlockRepository:
         ),
         (
           "b-block-image",
-          doc_id,
+          intro_id,
           "b-block-types",
           "text",
           2,
@@ -209,11 +217,34 @@ class SQLiteBlockRepository:
         ),
         (
           "b-block-container",
-          doc_id,
+          intro_id,
           "b-block-types",
           "text",
           3,
           {"text": "컨테이너 블록: 블록 묶음에 레이아웃(vertical / grid)을 적용해 섹션을 구조화합니다."},
+        ),
+        # PageBlock: intro → tech-stack (문서 간 연결 예시)
+        (
+          "b-page-stack",
+          intro_id,
+          None,
+          "page",
+          3,
+          {"document_id": stack_id},
+        ),
+        # ── tech-stack document ─────────────────────────────────────────────
+        ("b-stack-overview", stack_id, None, "container", 1, {"title": "백엔드", "layout": "grid"}),
+        ("b-stack-fastapi", stack_id, "b-stack-overview", "text", 1, {"text": "FastAPI — Python 기반 비동기 웹 프레임워크"}),
+        ("b-stack-sqlite", stack_id, "b-stack-overview", "text", 2, {"text": "SQLite — 경량 내장형 관계형 데이터베이스"}),
+        ("b-stack-pydantic", stack_id, "b-stack-overview", "text", 3, {"text": "Pydantic v2 — 타입 기반 데이터 검증"}),
+        # PageBlock: tech-stack → intro (역방향 연결 예시)
+        (
+          "b-page-intro",
+          stack_id,
+          None,
+          "page",
+          2,
+          {"document_id": intro_id},
         ),
       ]
 
@@ -223,8 +254,8 @@ class SQLiteBlockRepository:
         VALUES (?, ?, ?, ?, ?, ?)
         """,
         [
-          (block_id, document_id, parent_id, block_type, position, json.dumps(content, ensure_ascii=False))
-          for block_id, document_id, parent_id, block_type, position, content in blocks
+          (block_id, doc_id, parent_id, block_type, position, json.dumps(content, ensure_ascii=False))
+          for block_id, doc_id, parent_id, block_type, position, content in blocks
         ],
       )
 

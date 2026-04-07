@@ -290,6 +290,36 @@ body {
   grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
 }
 
+.notion-page {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.62rem 0.82rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--paper);
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.notion-page:hover {
+  background: var(--accent-soft);
+  border-color: rgba(0, 112, 109, 0.45);
+}
+
+.page-block-icon {
+  font-style: normal;
+  color: var(--accent);
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.page-block-title {
+  font-weight: 500;
+  color: var(--ink);
+}
+
 .unsupported-block,
 .error-state,
 .empty-state {

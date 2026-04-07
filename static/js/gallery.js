@@ -32,6 +32,10 @@ async function apiDeleteDocument(documentId) {
   if (!res.ok) throw new Error('Failed to delete document');
 }
 
+// ── Navigation callback (set during initGallery) ─────────────────────────────
+// Allows page blocks rendered deep inside the block tree to trigger navigation.
+let navigateTo = null;
+
 // ── Block renderers ──────────────────────────────────────────────────────────
 
 function createTextBlock(block) {
@@ -80,6 +84,16 @@ function createContainerBlock(block) {
   return node;
 }
 
+function createPageBlock(block) {
+  const template = document.getElementById('page-block-template');
+  const node = template.content.firstElementChild.cloneNode(true);
+  node.querySelector('.page-block-title').textContent = block.title || block.document_id;
+  node.addEventListener('click', () => {
+    if (navigateTo) navigateTo(block.document_id);
+  });
+  return node;
+}
+
 function renderBlock(block) {
   switch (block.type) {
     case 'text':
@@ -88,6 +102,8 @@ function renderBlock(block) {
       return createImageBlock(block);
     case 'container':
       return createContainerBlock(block);
+    case 'page':
+      return createPageBlock(block);
     default: {
       const unsupported = document.createElement('p');
       unsupported.className = 'notion-block unsupported-block';
@@ -131,12 +147,17 @@ function setActiveItem(list, targetItem) {
  */
 function enterInlineEdit(listItem, docId, initialTitle, list, onSelect) {
   const existingBtn = listItem.querySelector('.document-item');
+  const menuBtn = listItem.querySelector('.document-menu-btn');
 
   const input = document.createElement('input');
   input.type = 'text';
+  input.setAttribute('size', '1'); // prevent browser default intrinsic width
   input.className = 'document-title-input';
   input.value = initialTitle;
   existingBtn.replaceWith(input);
+
+  if (menuBtn) menuBtn.hidden = true;
+
   input.focus();
   input.select();
 
@@ -159,6 +180,8 @@ function enterInlineEdit(listItem, docId, initialTitle, list, onSelect) {
       onSelect(docId);
     });
     input.replaceWith(btn);
+
+    if (menuBtn) menuBtn.hidden = false;
   }
 
   input.addEventListener('keydown', (e) => {
@@ -238,6 +261,15 @@ async function initGallery() {
   const newDocBtn = document.getElementById('new-document-btn');
 
   let activeDocId = null;
+
+  navigateTo = (documentId) => {
+    const targetItem = list.querySelector(`li[data-id="${documentId}"]`);
+    if (targetItem) {
+      closeAllMenus(list);
+      setActiveItem(list, targetItem);
+    }
+    loadDocument(documentId);
+  };
 
   async function loadDocument(documentId) {
     activeDocId = documentId;

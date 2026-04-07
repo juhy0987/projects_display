@@ -36,7 +36,15 @@ class ContainerBlock(BlockBase):
   children: list["Block"] = Field(default_factory=list)
 
 
-Block = Annotated[TextBlock | ImageBlock | ContainerBlock, Field(discriminator="type")]
+class PageBlock(BlockBase):
+  """Block that links to another BlockDocument, enabling recursive page nesting."""
+
+  type: Literal["page"]
+  document_id: str
+  title: str = ""  # populated at query time from the referenced document
+
+
+Block = Annotated[TextBlock | ImageBlock | ContainerBlock | PageBlock, Field(discriminator="type")]
 
 
 class BlockDocument(BaseModel):
