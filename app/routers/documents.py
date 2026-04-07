@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, field_validator
 
@@ -54,6 +56,24 @@ def update_document_title(
   if not repo.update_document_title(document_id, body.title):
     raise HTTPException(status_code=404, detail="Document not found")
   return {"id": document_id, "title": body.title}
+
+
+class BlockCreate(BaseModel):
+  type: Literal["text", "image", "container"]
+  parent_block_id: str | None = None
+
+
+@router.post("/{document_id}/blocks", status_code=201)
+def create_block(
+  document_id: str,
+  body: BlockCreate,
+  repo: SQLiteBlockRepository = Depends(get_repository),
+) -> dict:
+  """Append a new block to a document."""
+  result = repo.create_block(document_id, body.type, body.parent_block_id)
+  if result is None:
+    raise HTTPException(status_code=404, detail="Document not found")
+  return result
 
 
 @router.delete("/{document_id}", status_code=204)

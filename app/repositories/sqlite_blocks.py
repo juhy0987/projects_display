@@ -183,6 +183,55 @@ class SQLiteBlockRepository:
       conn.commit()
     return True
 
+  def create_block(
+    self,
+    document_id: str,
+    block_type: str,
+    parent_block_id: str | None = None,
+  ) -> dict[str, Any] | None:
+    """Append a new block of the given type at the end of its sibling list.
+
+    Returns the created block data, or None if document not found or type is unsupported.
+    """
+    match block_type:
+      case "text":
+        default_content: dict[str, Any] = {"text": ""}
+      case "image":
+        default_content = {"url": "", "caption": ""}
+      case "container":
+        default_content = {"title": "", "layout": "vertical"}
+      case _:
+        return None
+
+    with sqlite3.connect(self._db_path) as conn:
+      if conn.execute("SELECT 1 FROM documents WHERE id = ?", (document_id,)).fetchone() is None:
+        return None
+
+      row = conn.execute(
+        "SELECT COALESCE(MAX(position), 0) FROM blocks WHERE document_id = ? AND parent_block_id IS ?",
+        (document_id, parent_block_id),
+      ).fetchone()
+      next_position = row[0] + 1
+
+      block_id = str(uuid.uuid4())
+      conn.execute(
+        """
+        INSERT INTO blocks(id, document_id, parent_block_id, type, position, content_json)
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (
+          block_id,
+          document_id,
+          parent_block_id,
+          block_type,
+          next_position,
+          json.dumps(default_content, ensure_ascii=False),
+        ),
+      )
+      conn.commit()
+
+    return {"id": block_id, "type": block_type, **default_content}
+
   def delete_document(self, document_id: str) -> bool:
     with sqlite3.connect(self._db_path) as conn:
       cursor = conn.execute("SELECT id FROM documents WHERE id = ?", (document_id,))
