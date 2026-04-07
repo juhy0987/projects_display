@@ -86,20 +86,38 @@ class SQLiteBlockRepository:
         (document_id,),
       ).fetchall()
 
-      doc_title_rows = conn.execute("SELECT id, title FROM documents").fetchall()
+      # Parse all blocks up front to avoid double-decoding content_json
+      parsed_blocks = [
+        {
+          "id": row["id"],
+          "parent_block_id": row["parent_block_id"],
+          "type": row["type"],
+          **json.loads(row["content_json"]),
+        }
+        for row in block_rows
+      ]
+
+      # Fetch titles only for documents referenced by page blocks
+      page_doc_ids = list({
+        item["document_id"]
+        for item in parsed_blocks
+        if item["type"] == "page" and "document_id" in item
+      })
+      if page_doc_ids:
+        placeholders = ",".join("?" * len(page_doc_ids))
+        doc_title_rows = conn.execute(
+          f"SELECT id, title FROM documents WHERE id IN ({placeholders})",
+          page_doc_ids,
+        ).fetchall()
+      else:
+        doc_title_rows = []
 
     doc_titles: dict[str, str] = {row["id"]: row["title"] for row in doc_title_rows}
 
     children_by_parent: dict[str | None, list[dict[str, Any]]] = {}
-    for row in block_rows:
-      parent_key = row["parent_block_id"]
-      children_by_parent.setdefault(parent_key, []).append(
-        {
-          "id": row["id"],
-          "type": row["type"],
-          **json.loads(row["content_json"]),
-        }
-      )
+    for item in parsed_blocks:
+      parent_key = item["parent_block_id"]
+      children_by_parent.setdefault(parent_key, []).append(item)
 
     def build_nodes(parent_id: str | None) -> list[Block]:
       nodes: list[Block] = []
