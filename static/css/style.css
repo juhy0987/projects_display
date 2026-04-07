@@ -84,10 +84,34 @@ body {
   top: 0.8rem;
 }
 
-.document-list-panel h2 {
-  margin: 0 0 0.8rem;
+.document-list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.8rem;
+}
+
+.document-list-header h2 {
+  margin: 0;
   font-family: "Fraunces", serif;
   font-size: 1.08rem;
+}
+
+.new-document-btn {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--accent);
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 0.28rem 0.55rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.new-document-btn:hover {
+  background: var(--accent-soft);
+  border-color: rgba(0, 112, 109, 0.45);
 }
 
 .document-list {
@@ -98,8 +122,16 @@ body {
   gap: 0.45rem;
 }
 
+.document-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
 .document-item {
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   border: 1px solid var(--line);
   border-radius: 10px;
   background: transparent;
@@ -107,11 +139,71 @@ body {
   padding: 0.62rem 0.75rem;
   cursor: pointer;
   color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .document-item.is-active {
   background: var(--accent-soft);
   border-color: rgba(0, 112, 109, 0.45);
+}
+
+.document-title-input {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid rgba(0, 112, 109, 0.6);
+  border-radius: 10px;
+  background: var(--accent-soft);
+  padding: 0.62rem 0.75rem;
+  font-family: inherit;
+  font-size: inherit;
+  color: var(--ink);
+  outline: none;
+}
+
+.document-menu-btn {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+  font-size: 1rem;
+  padding: 0.3rem 0.4rem;
+  border-radius: 6px;
+  line-height: 1;
+}
+
+.document-menu-btn:hover {
+  background: var(--paper-deep);
+}
+
+.document-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 10;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 8px 20px -6px var(--shadow);
+  min-width: 80px;
+  overflow: hidden;
+}
+
+.document-menu-delete {
+  width: 100%;
+  border: none;
+  background: transparent;
+  text-align: left;
+  padding: 0.55rem 0.8rem;
+  cursor: pointer;
+  color: #a03030;
+  font-size: 0.88rem;
+}
+
+.document-menu-delete:hover {
+  background: #fdeaea;
 }
 
 .block-page {

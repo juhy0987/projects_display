@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -116,6 +117,36 @@ class SQLiteBlockRepository:
       subtitle=doc_row["subtitle"],
       blocks=blocks,
     )
+
+  def create_document(self) -> dict[str, str]:
+    doc_id = str(uuid.uuid4())
+    title = "새 문서"
+    with sqlite3.connect(self._db_path) as conn:
+      conn.execute(
+        "INSERT INTO documents(id, title, subtitle) VALUES (?, ?, ?)",
+        (doc_id, title, ""),
+      )
+      conn.commit()
+    return {"id": doc_id, "title": title, "subtitle": ""}
+
+  def update_document_title(self, document_id: str, title: str) -> bool:
+    with sqlite3.connect(self._db_path) as conn:
+      cursor = conn.execute(
+        "UPDATE documents SET title = ? WHERE id = ?",
+        (title, document_id),
+      )
+      conn.commit()
+    return cursor.rowcount > 0
+
+  def delete_document(self, document_id: str) -> bool:
+    with sqlite3.connect(self._db_path) as conn:
+      cursor = conn.execute("SELECT id FROM documents WHERE id = ?", (document_id,))
+      if cursor.fetchone() is None:
+        return False
+      conn.execute("DELETE FROM blocks WHERE document_id = ?", (document_id,))
+      conn.execute("DELETE FROM documents WHERE id = ?", (document_id,))
+      conn.commit()
+    return True
 
   def _seed_if_empty(self) -> None:
     with sqlite3.connect(self._db_path) as conn:
