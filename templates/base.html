@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Project Manager</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=SUIT:wght@400;500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/css/style.css" />
+  {% block head %}{% endblock %}
+</head>
+<body>
+  <div class="ambient-layer"></div>
+  <header class="topbar">
+    <p class="eyebrow">Project Manager</p>
+    <h1>Block-based Project Manager</h1>
+    <p class="subcopy">텍스트, 이미지, 컨테이너 블록을 조합해 노션처럼 프로젝트 페이지를 구성합니다.</p>
+  </header>
+
+  {% block content %}{% endblock %}
+
+  {% block templates %}{% endblock %}
+
+  <script src="/static/js/gallery.js" defer></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>
