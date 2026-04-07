@@ -38,19 +38,23 @@ Conventional Commits 기반:
 - Draft PR 적극 사용
 - PR 제목은 커밋 컨벤션과 동일한 접두사 사용
 - PR 본문 필수 항목:
+  - 이슈 번호
   - 배경/목적
   - 변경 사항 요약
   - 테스트 결과
   - 리뷰 포인트
+- 라벨 지정 권장
 - PR 크기는 가능한 작게 유지 (권장: 300줄 내외)
 
 PR 제목 형식
-- `[FEATURE] <Title>`
-- `[REFACTOR] <Title>`
-- `[FIX] <Title>`
-- `[DOCS] <Title>`
-- `[CHORE] <Title>`
+- `[FEAT#<Issue-Number>] <Title>`
+- `[REFAC#<Issue-Number>] <Title>`
+- `[FIX#<Issue-Number>] <Title>`
+- `[CHORE#<Issue-Number>] <Title>`
 
+예시:
+
+- `[FEAT#8] Main router 추가`
 
 ## 4. 리뷰 규칙
 
