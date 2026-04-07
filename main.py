@@ -1,66 +1,47 @@
 from __future__ import annotations
 
-import json
-from json import JSONDecodeError
 from pathlib import Path
 
 from fastapi import FastAPI
-from pydantic import BaseModel, Field
+from fastapi import HTTPException
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.requests import Request
 
-BASE_DIR = Path(__file__).resolve().parent
-DATA_FILE = BASE_DIR / "data" / "projects.json"
+from app.models.blocks import BlockDocument
+from app.repositories.sqlite_blocks import SQLiteBlockRepository
 
-app = FastAPI(title="Projects Display Museum")
+BASE_DIR = Path(__file__).resolve().parent
+DB_FILE = BASE_DIR / "data" / "blocks.sqlite3"
+
+app = FastAPI(title="Project Manager")
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
-
-
-class ProjectItem(BaseModel):
-    """Represents one exhibition project card."""
-
-    id: str
-    title: str
-    subtitle: str = ""
-    markdown: str = ""
-    image_url: str = ""
-    notion_url: str = Field(default="")
-
-
-def load_projects() -> list[ProjectItem]:
-    """Load project items from local JSON data source."""
-
-    if not DATA_FILE.exists():
-        return []
-
-    with DATA_FILE.open("r", encoding="utf-8") as file:
-        try:
-            data = json.load(file)
-        except JSONDecodeError:
-            return []
-
-    if not isinstance(data, list):
-        return []
-
-    projects: list[ProjectItem] = []
-    for item in data:
-        if isinstance(item, dict):
-            projects.append(ProjectItem.model_validate(item))
-    return projects
+repository = SQLiteBlockRepository(DB_FILE)
+repository.initialize()
 
 
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request) -> HTMLResponse:
-    """Render the main 3D exhibition page."""
+    """Render the notion-like block page."""
 
     return templates.TemplateResponse(request=request, name="index.html")
 
 
-@app.get("/api/projects", response_model=list[ProjectItem])
-def list_projects() -> list[ProjectItem]:
-    """Return all projects for gallery rendering."""
+@app.get("/api/documents")
+def list_documents() -> list[dict[str, str]]:
+    """Return all available block documents."""
 
-    return load_projects()
+    return repository.list_documents()
+
+
+@app.get("/api/documents/{document_id}", response_model=BlockDocument)
+def get_document(document_id: str) -> BlockDocument:
+    """Return one block document by id."""
+
+    document = repository.get_document(document_id)
+    if document is None:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    return document

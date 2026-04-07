@@ -1,70 +1,141 @@
-async function fetchProjects() {
-  const response = await fetch('/api/projects');
+async function fetchDocuments() {
+  const response = await fetch('/api/documents');
   if (!response.ok) {
-    throw new Error('Failed to fetch projects');
+    throw new Error('Failed to fetch documents');
   }
   return response.json();
 }
 
-function notionEmbedUrl(url) {
-  if (!url) {
-    return '';
+async function fetchDocument(documentId) {
+  const response = await fetch(`/api/documents/${documentId}`);
+  if (!response.ok) {
+    throw new Error('Failed to fetch document');
   }
-
-  const encoded = encodeURIComponent(url);
-  return `https://notion.site/embed/${encoded}`;
+  return response.json();
 }
 
-function createProjectCard(project) {
-  const template = document.getElementById('project-card-template');
-  const fragment = template.content.cloneNode(true);
-  const card = fragment.querySelector('.project-card');
+function createTextBlock(block) {
+  const template = document.getElementById('text-block-template');
+  const node = template.content.firstElementChild.cloneNode(true);
+  node.textContent = block.text;
+  return node;
+}
 
-  fragment.querySelector('.project-title').textContent = project.title;
-  fragment.querySelector('.project-subtitle').textContent = project.subtitle || '';
+function createImageBlock(block) {
+  const template = document.getElementById('image-block-template');
+  const node = template.content.firstElementChild.cloneNode(true);
+  const image = node.querySelector('.notion-image');
+  const caption = node.querySelector('.notion-caption');
 
-  const markdownBody = fragment.querySelector('.markdown-body');
-  markdownBody.innerHTML = marked.parse(project.markdown || '');
+  image.src = block.url;
+  caption.textContent = block.caption || '';
 
-  const image = fragment.querySelector('.project-image');
-  if (project.image_url) {
-    image.src = project.image_url;
-  } else {
-    image.style.display = 'none';
+  if (!block.caption) {
+    caption.remove();
   }
 
-  const notionFrame = fragment.querySelector('.notion-frame');
-  if (project.notion_url) {
-    notionFrame.src = notionEmbedUrl(project.notion_url);
+  return node;
+}
+
+function createContainerBlock(block) {
+  const template = document.getElementById('container-block-template');
+  const node = template.content.firstElementChild.cloneNode(true);
+  const titleNode = node.querySelector('.container-title');
+  const childrenRoot = node.querySelector('.container-children');
+
+  if (block.title) {
+    titleNode.textContent = block.title;
   } else {
-    notionFrame.style.display = 'none';
+    titleNode.remove();
   }
 
-  const toggleBtn = fragment.querySelector('.toggle-btn');
-  toggleBtn.addEventListener('click', (event) => {
-    event.stopPropagation();
-    card.classList.toggle('is-flipped');
-    toggleBtn.textContent = card.classList.contains('is-flipped') ? 'Back to Front' : 'View Detail';
+  if (block.layout === 'grid') {
+    childrenRoot.classList.add('is-grid');
+  }
+
+  block.children.forEach((child) => {
+    childrenRoot.appendChild(renderBlock(child));
   });
 
-  card.addEventListener('click', () => {
-    card.classList.toggle('is-flipped');
-    toggleBtn.textContent = card.classList.contains('is-flipped') ? 'Back to Front' : 'View Detail';
-  });
+  return node;
+}
 
-  return fragment;
+function renderBlock(block) {
+  switch (block.type) {
+    case 'text':
+      return createTextBlock(block);
+    case 'image':
+      return createImageBlock(block);
+    case 'container':
+      return createContainerBlock(block);
+    default: {
+      const unsupported = document.createElement('p');
+      unsupported.className = 'notion-block unsupported-block';
+      unsupported.textContent = `지원하지 않는 블록 타입: ${block.type}`;
+      return unsupported;
+    }
+  }
+}
+
+function renderDocumentList(documents, onSelect) {
+  const list = document.getElementById('document-list');
+  list.innerHTML = '';
+
+  documents.forEach((docInfo, index) => {
+    const item = document.createElement('li');
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'document-item';
+    button.textContent = docInfo.title;
+
+    if (index === 0) {
+      button.classList.add('is-active');
+    }
+
+    button.addEventListener('click', () => {
+      list.querySelectorAll('.document-item').forEach((node) => node.classList.remove('is-active'));
+      button.classList.add('is-active');
+      onSelect(docInfo.id);
+    });
+
+    item.appendChild(button);
+    list.appendChild(item);
+  });
+}
+
+function renderDocument(documentPayload) {
+  const pageTitle = document.getElementById('page-title');
+  const pageSubtitle = document.getElementById('page-subtitle');
+  const root = document.getElementById('block-root');
+
+  pageTitle.textContent = documentPayload.title;
+  pageSubtitle.textContent = documentPayload.subtitle || '';
+  root.innerHTML = '';
+
+  documentPayload.blocks.forEach((block) => {
+    root.appendChild(renderBlock(block));
+  });
 }
 
 async function initGallery() {
-  const gallery = document.getElementById('gallery');
+  const root = document.getElementById('block-root');
 
   try {
-    const projects = await fetchProjects();
-    projects.forEach((project) => {
-      gallery.appendChild(createProjectCard(project));
-    });
+    const documents = await fetchDocuments();
+    if (documents.length === 0) {
+      root.innerHTML = '<p class="empty-state">문서가 없습니다.</p>';
+      return;
+    }
+
+    const loadDocument = async (documentId) => {
+      const payload = await fetchDocument(documentId);
+      renderDocument(payload);
+    };
+
+    renderDocumentList(documents, loadDocument);
+    await loadDocument(documents[0].id);
   } catch (error) {
-    gallery.innerHTML = `<p>전시 데이터를 불러오지 못했습니다: ${error.message}</p>`;
+    root.innerHTML = `<p class="error-state">문서를 불러오지 못했습니다: ${error.message}</p>`;
   }
 }
 
