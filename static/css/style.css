@@ -387,6 +387,76 @@ body {
   min-height: 60px;
 }
 
+/* ── Block adder & palette ───────────────────────────────────────────────── */
+
+.block-adder {
+  display: flex;
+  justify-content: flex-start;
+  padding-top: 0.25rem;
+}
+
+.block-adder-btn {
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 1.1rem;
+  line-height: 1;
+  padding: 0.2rem 0.55rem 0.28rem;
+  cursor: pointer;
+  opacity: 0.45;
+  transition: opacity 0.15s, background 0.15s, border-color 0.15s;
+}
+
+.block-adder-btn:hover {
+  opacity: 1;
+  background: var(--accent-soft);
+  border-color: rgba(0, 112, 109, 0.45);
+  color: var(--accent);
+}
+
+.block-palette {
+  display: flex;
+  gap: 0.35rem;
+  padding: 0.45rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow: 0 8px 20px -6px var(--shadow);
+  margin-top: 0.3rem;
+  width: fit-content;
+  animation: fade-slide-up 0.18s ease both;
+}
+
+.block-palette-item {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: transparent;
+  padding: 0.4rem 0.65rem;
+  font-family: inherit;
+  font-size: 0.85rem;
+  color: var(--ink);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.12s, border-color 0.12s;
+}
+
+.block-palette-item:hover {
+  background: var(--accent-soft);
+  border-color: rgba(0, 112, 109, 0.45);
+}
+
+.block-palette-icon {
+  font-style: normal;
+  font-size: 0.9rem;
+  color: var(--accent);
+  min-width: 1em;
+  text-align: center;
+}
+
 @keyframes fade-slide-up {
   from {
     opacity: 0;

@@ -41,6 +41,16 @@ async function apiPatchBlock(blockId, fields) {
   if (!res.ok) throw new Error('Failed to update block');
 }
 
+async function apiCreateBlock(documentId, type, parentBlockId = null) {
+  const res = await fetch(`/api/documents/${documentId}/blocks`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ type, parent_block_id: parentBlockId }),
+  });
+  if (!res.ok) throw new Error('Failed to create block');
+  return res.json();
+}
+
 // ── Inline editing helpers ────────────────────────────────────────────────────
 
 /**
@@ -97,9 +107,77 @@ function enableContentEditable(el, blockId, field, notionBlock) {
   });
 }
 
-// ── Navigation callback (set during initGallery) ─────────────────────────────
-// Allows page blocks rendered deep inside the block tree to trigger navigation.
+// ── Module-level callbacks (set during initGallery) ──────────────────────────
+// Allows block renderers to trigger navigation and block creation without
+// knowing about the active document or load function.
 let navigateTo = null;
+let addBlock = null; // (type, parentBlockId?) => Promise<void>
+
+// ── Block palette (slash command / + button) ─────────────────────────────────
+
+const BLOCK_PALETTE_ITEMS = [
+  { type: 'text', label: '텍스트', icon: 'T' },
+  { type: 'image', label: '이미지', icon: '▣' },
+  { type: 'container', label: '컨테이너', icon: '⊞' },
+];
+
+/**
+ * Show the block type selection palette below anchorEl.
+ * Calls addBlock(type) on selection.
+ * @param {HTMLElement} anchorEl - Element to position the palette after
+ * @param {string|null} parentBlockId - Optional parent block id
+ */
+function openBlockPalette(anchorEl, parentBlockId = null) {
+  document.querySelectorAll('.block-palette').forEach((p) => p.remove());
+
+  const palette = document.createElement('div');
+  palette.className = 'block-palette';
+
+  BLOCK_PALETTE_ITEMS.forEach(({ type, label, icon }) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'block-palette-item';
+    btn.innerHTML = `<span class="block-palette-icon">${icon}</span>${label}`;
+    btn.addEventListener('mousedown', async (e) => {
+      e.preventDefault(); // keep focus on text block so blur doesn't fire early
+      palette.remove();
+      if (addBlock) await addBlock(type, parentBlockId);
+    });
+    palette.appendChild(btn);
+  });
+
+  anchorEl.after(palette);
+
+  // Close on outside click (deferred to avoid catching the triggering click)
+  setTimeout(() => {
+    function onOutside(e) {
+      if (!palette.contains(e.target)) {
+        palette.remove();
+        document.removeEventListener('click', onOutside, true);
+      }
+    }
+    document.addEventListener('click', onOutside, true);
+  }, 0);
+}
+
+/** + button rendered at the bottom of block-root. */
+function createBlockAdder() {
+  const adder = document.createElement('div');
+  adder.className = 'block-adder';
+
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'block-adder-btn';
+  btn.setAttribute('aria-label', '블록 추가');
+  btn.textContent = '+';
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    openBlockPalette(adder);
+  });
+
+  adder.appendChild(btn);
+  return adder;
+}
 
 // ── Block renderers ──────────────────────────────────────────────────────────
 
@@ -108,6 +186,15 @@ function createTextBlock(block) {
   const node = template.content.firstElementChild.cloneNode(true);
   node.textContent = block.text;
   enableContentEditable(node, block.id, 'text', node);
+
+  // Slash command: open block palette when '/' is typed in an empty block
+  node.addEventListener('keydown', (e) => {
+    if (e.key === '/' && node.contentEditable === 'true' && !node.textContent.trim()) {
+      e.preventDefault();
+      openBlockPalette(node);
+    }
+  });
+
   return node;
 }
 
@@ -268,6 +355,8 @@ function renderDocument(documentPayload) {
   documentPayload.blocks.forEach((block) => {
     root.appendChild(renderBlock(block));
   });
+
+  root.appendChild(createBlockAdder());
 }
 
 // ── Document list helpers ────────────────────────────────────────────────────
@@ -415,11 +504,21 @@ async function initGallery() {
     loadDocument(documentId);
   };
 
-  async function loadDocument(documentId) {
+  async function loadDocument(documentId, { focusNewBlock = false } = {}) {
     activeDocId = documentId;
+    addBlock = async (type, parentBlockId = null) => {
+      await apiCreateBlock(activeDocId, type, parentBlockId);
+      await loadDocument(activeDocId, { focusNewBlock: true });
+    };
     try {
       const payload = await fetchDocument(documentId);
       renderDocument(payload);
+      if (focusNewBlock) {
+        const notionBlocks = root.querySelectorAll('.notion-block');
+        if (notionBlocks.length > 0) {
+          notionBlocks[notionBlocks.length - 1].click();
+        }
+      }
     } catch (err) {
       const p = document.createElement('p');
       p.className = 'error-state';
