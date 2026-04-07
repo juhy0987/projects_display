@@ -52,6 +52,7 @@ function createImageBlock(block) {
   const caption = node.querySelector('.notion-caption');
 
   image.src = block.url;
+  image.alt = block.caption || '';
   caption.textContent = block.caption || '';
 
   if (!block.caption) {
