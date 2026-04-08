@@ -56,6 +56,15 @@ async function apiDeleteBlock(blockId) {
   if (!res.ok) throw new Error('Failed to delete block');
 }
 
+async function apiChangeBlockType(blockId, type) {
+  const res = await fetch(`/api/blocks/${blockId}/type`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ type }),
+  });
+  if (!res.ok) throw new Error('Failed to change block type');
+}
+
 async function apiMoveBlock(blockId, beforeBlockId) {
   const res = await fetch(`/api/blocks/${blockId}/position`, {
     method: 'PATCH',
@@ -75,7 +84,7 @@ async function apiMoveBlock(blockId, beforeBlockId) {
  * @param {string}      field     - JSON field name to patch (e.g. "text", "title")
  * @param {HTMLElement} notionBlock - The .notion-block ancestor for is-editing class
  */
-function enableContentEditable(el, blockId, field, notionBlock) {
+function enableContentEditable(el, blockId, field, notionBlock, { onEnter = null } = {}) {
   let originalText = '';
   let escaped = false;
 
@@ -98,9 +107,10 @@ function enableContentEditable(el, blockId, field, notionBlock) {
   });
 
   el.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
+    if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       el.blur();
+      if (onEnter) onEnter();
     } else if (e.key === 'Escape') {
       escaped = true;
       el.textContent = originalText;
@@ -126,6 +136,7 @@ function enableContentEditable(el, blockId, field, notionBlock) {
 // knowing about the active document or load function.
 let navigateTo = null;
 let addBlock = null; // (type, parentBlockId?) => Promise<void>
+let addBlockAfter = null; // (type, afterBlockId, parentBlockId?) => Promise<void>
 let reloadDocument = null; // () => void — reload the active document
 
 // ── Drag state ────────────────────────────────────────────────────────────────
@@ -142,13 +153,14 @@ const BLOCK_PALETTE_ITEMS = [
   { type: 'divider', label: '구분선', icon: '—' },
 ];
 
+
 /**
  * Show the block type selection palette below anchorEl.
- * Calls addBlock(type) on selection.
  * @param {HTMLElement} anchorEl - Element to position the palette after
  * @param {string|null} parentBlockId - Optional parent block id
+ * @param {function|null} onSelect - Optional override: called with (type) instead of addBlock
  */
-function openBlockPalette(anchorEl, parentBlockId = null) {
+function openBlockPalette(anchorEl, parentBlockId = null, onSelect = null) {
   document.querySelectorAll('.block-palette').forEach((p) => p.remove());
 
   const palette = document.createElement('div');
@@ -171,7 +183,8 @@ function openBlockPalette(anchorEl, parentBlockId = null) {
     btn.addEventListener('mousedown', (e) => e.preventDefault());
     btn.addEventListener('click', async () => {
       close();
-      if (addBlock) await addBlock(type, parentBlockId);
+      if (onSelect) await onSelect(type);
+      else if (addBlock) await addBlock(type, parentBlockId);
     });
     palette.appendChild(btn);
   });
@@ -186,25 +199,6 @@ function openBlockPalette(anchorEl, parentBlockId = null) {
     document.addEventListener('click', onOutside, true);
     removeOutsideListener = () => document.removeEventListener('click', onOutside, true);
   }, 0);
-}
-
-/** + button rendered at the bottom of block-root. */
-function createBlockAdder() {
-  const adder = document.createElement('div');
-  adder.className = 'block-adder';
-
-  const btn = document.createElement('button');
-  btn.type = 'button';
-  btn.className = 'block-adder-btn';
-  btn.setAttribute('aria-label', '블록 추가');
-  btn.textContent = '+';
-  btn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    openBlockPalette(adder);
-  });
-
-  adder.appendChild(btn);
-  return adder;
 }
 
 // ── Block delete confirmation overlay ─────────────────────────────────────────
@@ -288,46 +282,96 @@ function wrapBlock(blockEl, block, parentBlockId = null) {
   const actions = document.createElement('div');
   actions.className = 'block-actions';
 
-  // Drag handle
+  // Drag handle — also opens action dropdown on click
+  const dragWrap = document.createElement('div');
+  dragWrap.className = 'block-more-wrap';
+
   const dragHandle = document.createElement('button');
   dragHandle.type = 'button';
   dragHandle.className = 'block-drag-handle';
-  dragHandle.setAttribute('aria-label', '드래그하여 이동');
+  dragHandle.setAttribute('aria-label', '이동 / 블록 액션');
   dragHandle.textContent = '⠿';
-
-  // More button + menu
-  const moreWrap = document.createElement('div');
-  moreWrap.className = 'block-more-wrap';
-
-  const moreBtn = document.createElement('button');
-  moreBtn.type = 'button';
-  moreBtn.className = 'block-more-btn';
-  moreBtn.setAttribute('aria-label', '더보기');
-  moreBtn.textContent = '⋯';
 
   const moreMenu = document.createElement('div');
   moreMenu.className = 'block-more-menu';
   moreMenu.hidden = true;
 
+  // Type change section (only for non-page blocks)
+  const isPageBlock = block.type === 'page';
+  if (!isPageBlock) {
+    const sectionLabel = document.createElement('div');
+    sectionLabel.className = 'block-menu-section-label';
+    sectionLabel.textContent = '타입 변경';
+    moreMenu.appendChild(sectionLabel);
+
+    BLOCK_PALETTE_ITEMS.forEach(({ type, label, icon }) => {
+      const changeBtn = document.createElement('button');
+      changeBtn.type = 'button';
+      changeBtn.className = 'block-change-type-btn';
+      if (type === block.type) changeBtn.classList.add('is-current');
+      changeBtn.innerHTML = `<span class="block-menu-icon">${icon}</span>${label}`;
+      changeBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        moreMenu.hidden = true;
+        if (type === block.type) return;
+        try {
+          await apiChangeBlockType(block.id, type);
+          if (reloadDocument) reloadDocument();
+        } catch (err) {
+          console.error('블록 타입 변경 실패:', err);
+        }
+      });
+      moreMenu.appendChild(changeBtn);
+    });
+
+    const menuDivider = document.createElement('div');
+    menuDivider.className = 'block-menu-divider';
+    moreMenu.appendChild(menuDivider);
+  }
+
+  // Delete action
   const deleteBtn = document.createElement('button');
   deleteBtn.type = 'button';
   deleteBtn.className = 'block-delete-btn';
   deleteBtn.textContent = '삭제';
-
   moreMenu.appendChild(deleteBtn);
-  moreWrap.appendChild(moreBtn);
-  moreWrap.appendChild(moreMenu);
-  actions.appendChild(dragHandle);
-  actions.appendChild(moreWrap);
+
+  dragWrap.appendChild(dragHandle);
+  dragWrap.appendChild(moreMenu);
+
+  // Insert below button
+  const insertBtn = document.createElement('button');
+  insertBtn.type = 'button';
+  insertBtn.className = 'block-insert-btn';
+  insertBtn.setAttribute('aria-label', '아래에 블록 추가');
+  insertBtn.textContent = '+';
+
+  actions.appendChild(insertBtn);
+  actions.appendChild(dragWrap);
   wrapper.appendChild(actions);
   wrapper.appendChild(blockEl);
 
-  // ── More menu toggle ──────────────────────────────────────────────────────
-  moreBtn.addEventListener('click', (e) => {
+  // ── Drag handle click → action dropdown ──────────────────────────────────
+  let dragDidStart = false;
+
+  dragHandle.addEventListener('click', (e) => {
     e.stopPropagation();
+    if (dragDidStart) {
+      dragDidStart = false;
+      return;
+    }
     const wasHidden = moreMenu.hidden;
     document.querySelectorAll('.block-more-menu').forEach((m) => (m.hidden = true));
     moreMenu.hidden = !wasHidden;
+  });
+
+  // ── Insert below ─────────────────────────────────────────────────────────
+  insertBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    document.querySelectorAll('.block-more-menu').forEach((m) => (m.hidden = true));
+    openBlockPalette(wrapper, parentBlockId, async (type) => {
+      if (addBlockAfter) await addBlockAfter(type, block.id, parentBlockId);
+    });
   });
 
   // ── Delete with confirmation ──────────────────────────────────────────────
@@ -355,6 +399,7 @@ function wrapBlock(blockEl, block, parentBlockId = null) {
       e.preventDefault();
       return;
     }
+    dragDidStart = true;
     currentDragBlockId = block.id;
     currentDragParentBlockId = parentBlockId ?? '';
     e.dataTransfer.effectAllowed = 'move';
@@ -451,8 +496,16 @@ function createTextBlock(block) {
   let originalText = node.textContent;
   let currentLevel = block.level ?? null;
 
-  enableContentEditable(node, block.id, 'text', node);
+  enableContentEditable(node, block.id, 'text', node, {
+    onEnter: () => {
+      const parentBlockId =
+        node.closest('.block-wrapper')?.dataset.parentBlockId || null;
+      if (addBlockAfter) addBlockAfter('text', block.id, parentBlockId).catch(console.error);
+    },
+  });
 
+  // Heading promotion handler registered in capture phase to preempt enableContentEditable's
+  // bubble-phase Enter handler, preventing spurious block creation on heading promotion.
   node.addEventListener('keydown', (e) => {
     // Slash command: open block palette when '/' is typed in an empty block
     if (e.key === '/' && node.contentEditable === 'true' && !node.textContent.trim()) {
@@ -463,17 +516,18 @@ function createTextBlock(block) {
     }
 
     if (node.contentEditable !== 'true') return;
-    if (e.key !== 'Enter' && e.key !== ' ') return;
+    if (e.key !== ' ' && !(e.key === 'Enter' && !e.shiftKey)) return;
 
     // Markdown heading promotion: only when content is exactly #, ##, or ###
     const raw = node.textContent;
     const exactPrefix = raw.match(/^(#{1,3})$/);
     if (!exactPrefix) {
-      if (e.key === 'Enter') { e.preventDefault(); node.blur(); }
+      // Enter without heading prefix is handled by enableContentEditable's onEnter
       return;
     }
 
     e.preventDefault();
+    e.stopImmediatePropagation();
     const newLevel = exactPrefix[1].length;
     node.textContent = '';
     node.dataset.level = String(newLevel);
@@ -670,6 +724,17 @@ function renderBlock(block, parentBlockId = null) {
   return wrapBlock(blockEl, block, parentBlockId);
 }
 
+// ── Block focus helper ───────────────────────────────────────────────────────
+
+function focusBlock(wrapperEl) {
+  const blockEl = wrapperEl.querySelector('.notion-block');
+  if (!blockEl) return;
+  const target = blockEl.classList.contains('notion-text')
+    ? blockEl
+    : (blockEl.querySelector('.notion-caption, .container-title') ?? blockEl);
+  target.click();
+}
+
 // ── Document page renderer ───────────────────────────────────────────────────
 
 function renderDocument(documentPayload) {
@@ -684,8 +749,6 @@ function renderDocument(documentPayload) {
   documentPayload.blocks.forEach((block) => {
     root.appendChild(renderBlock(block));
   });
-
-  root.appendChild(createBlockAdder());
 }
 
 // ── Document list helpers ────────────────────────────────────────────────────
@@ -837,26 +900,54 @@ async function initGallery() {
     if (activeDocId) loadDocument(activeDocId);
   };
 
-  async function loadDocument(documentId, { focusNewBlock = false } = {}) {
+  async function loadDocument(documentId, { focusBlockId = null } = {}) {
     activeDocId = documentId;
     addBlock = async (type, parentBlockId = null) => {
-      await apiCreateBlock(activeDocId, type, parentBlockId);
-      await loadDocument(activeDocId, { focusNewBlock: true });
+      const newBlock = await apiCreateBlock(activeDocId, type, parentBlockId);
+      const containerEl = parentBlockId
+        ? document.querySelector(`[data-block-id="${parentBlockId}"] .container-children`)
+        : root;
+      if (containerEl) {
+        const newWrapper = renderBlock(newBlock, parentBlockId);
+        containerEl.appendChild(newWrapper);
+        focusBlock(newWrapper);
+      }
+    };
+    addBlockAfter = async (type, afterBlockId, parentBlockId = null) => {
+      const newBlock = await apiCreateBlock(activeDocId, type, parentBlockId);
+      const afterWrapper = document.querySelector(`[data-block-id="${afterBlockId}"]`);
+      if (afterWrapper) {
+        const newWrapper = renderBlock(newBlock, parentBlockId);
+        afterWrapper.after(newWrapper);
+        // 서버 순서도 DOM과 일치시킴: 삽입된 위치의 다음 형제 앞으로 이동
+        const nextWrapper = newWrapper.nextElementSibling;
+        if (nextWrapper?.dataset?.blockId) {
+          await apiMoveBlock(newBlock.id, nextWrapper.dataset.blockId);
+        }
+        focusBlock(newWrapper);
+      }
     };
     try {
       const payload = await fetchDocument(documentId);
+
+      // Ensure the last root-level block is always a text block
+      const rootBlocks = payload.blocks;
+      const lastBlock = rootBlocks[rootBlocks.length - 1];
+      if (!lastBlock || lastBlock.type !== 'text') {
+        const newBlock = await apiCreateBlock(activeDocId, 'text');
+        await loadDocument(documentId, { focusBlockId: focusBlockId ?? newBlock.id });
+        return;
+      }
+
       renderDocument(payload);
-      if (focusNewBlock) {
-        const topWrappers = root.querySelectorAll(':scope > .block-wrapper');
-        if (topWrappers.length > 0) {
-          const lastWrapper = topWrappers[topWrappers.length - 1];
-          const lastBlock = lastWrapper.querySelector('.notion-block');
-          if (lastBlock) {
-            const focusTarget = lastBlock.classList.contains('notion-text')
-              ? lastBlock
-              : (lastBlock.querySelector('.notion-caption, .container-title') ?? lastBlock);
-            focusTarget.click();
-          }
+      if (focusBlockId) {
+        const targetWrapper = root.querySelector(`[data-block-id="${focusBlockId}"]`);
+        const targetBlock = targetWrapper?.querySelector('.notion-block');
+        if (targetBlock) {
+          const focusTarget = targetBlock.classList.contains('notion-text')
+            ? targetBlock
+            : (targetBlock.querySelector('.notion-caption, .container-title') ?? targetBlock);
+          focusTarget.click();
         }
       }
     } catch (err) {

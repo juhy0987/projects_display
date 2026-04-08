@@ -23,6 +23,10 @@ class BlockPositionPatch(BaseModel):
   before_block_id: str | None = None
 
 
+class BlockTypeChange(BaseModel):
+  type: Literal["text", "image", "container", "divider"]
+
+
 @router.patch("/{block_id}")
 def patch_block(
   block_id: str,
@@ -50,6 +54,18 @@ def move_block(
     raise HTTPException(status_code=404, detail="Block not found")
   if result is False:
     raise HTTPException(status_code=422, detail="Invalid before_block_id")
+  return {"id": block_id}
+
+
+@router.patch("/{block_id}/type")
+def change_block_type(
+  block_id: str,
+  body: BlockTypeChange,
+  repo: SQLiteBlockRepository = Depends(get_repository),
+) -> dict[str, str]:
+  """Change a block's type and reset its content to defaults."""
+  if not repo.change_block_type(block_id, body.type):
+    raise HTTPException(status_code=404, detail="Block not found")
   return {"id": block_id}
 
 

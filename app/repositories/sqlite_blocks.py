@@ -226,6 +226,39 @@ class SQLiteBlockRepository:
     ).fetchall()
     return [row[0] for row in rows]
 
+  def change_block_type(self, block_id: str, new_type: str) -> bool:
+    """Change a block's type and reset its content to defaults.
+
+    Deletes all descendant blocks (important when changing FROM container).
+    Returns False if block_id not found or new_type is unsupported.
+    """
+    match new_type:
+      case "text":
+        default_content: dict[str, Any] = {"text": ""}
+      case "image":
+        default_content = {"url": "", "caption": ""}
+      case "container":
+        default_content = {"title": "", "layout": "vertical"}
+      case "divider":
+        default_content = {}
+      case _:
+        return False
+
+    block_row = self._session.get(BlockRow, block_id)
+    if block_row is None:
+      return False
+
+    # Delete all descendants (covers container children)
+    all_ids = self._collect_subtree_ids(block_id)
+    descendant_ids = [i for i in all_ids if i != block_id]
+    if descendant_ids:
+      self._session.execute(delete(BlockRow).where(BlockRow.id.in_(descendant_ids)))
+
+    block_row.type = new_type
+    block_row.content_json = json.dumps(default_content, ensure_ascii=False)
+    self._session.commit()
+    return True
+
   def move_block(self, block_id: str, before_block_id: str | None) -> bool | None:
     """Reorder a block among its siblings.
 
