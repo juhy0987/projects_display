@@ -750,6 +750,17 @@ function renderBlock(block, parentBlockId = null) {
   return wrapBlock(blockEl, block, parentBlockId);
 }
 
+// ── Block focus helper ───────────────────────────────────────────────────────
+
+function focusBlock(wrapperEl) {
+  const blockEl = wrapperEl.querySelector('.notion-block');
+  if (!blockEl) return;
+  const target = blockEl.classList.contains('notion-text')
+    ? blockEl
+    : (blockEl.querySelector('.notion-caption, .container-title') ?? blockEl);
+  target.click();
+}
+
 // ── Document page renderer ───────────────────────────────────────────────────
 
 function renderDocument(documentPayload) {
@@ -919,16 +930,28 @@ async function initGallery() {
     activeDocId = documentId;
     addBlock = async (type, parentBlockId = null) => {
       const newBlock = await apiCreateBlock(activeDocId, type, parentBlockId);
-      await loadDocument(activeDocId, { focusBlockId: newBlock.id });
+      const containerEl = parentBlockId
+        ? document.querySelector(`[data-block-id="${parentBlockId}"] .container-children`)
+        : root;
+      if (containerEl) {
+        const newWrapper = renderBlock(newBlock, parentBlockId);
+        containerEl.appendChild(newWrapper);
+        focusBlock(newWrapper);
+      }
     };
     addBlockAfter = async (type, afterBlockId, parentBlockId = null) => {
       const newBlock = await apiCreateBlock(activeDocId, type, parentBlockId);
-      const currentWrapper = document.querySelector(`[data-block-id="${afterBlockId}"]`);
-      const nextWrapper = currentWrapper?.nextElementSibling;
-      if (nextWrapper?.dataset?.blockId) {
-        await apiMoveBlock(newBlock.id, nextWrapper.dataset.blockId);
+      const afterWrapper = document.querySelector(`[data-block-id="${afterBlockId}"]`);
+      if (afterWrapper) {
+        const newWrapper = renderBlock(newBlock, parentBlockId);
+        afterWrapper.after(newWrapper);
+        // 서버 순서도 DOM과 일치시킴: 삽입된 위치의 다음 형제 앞으로 이동
+        const nextWrapper = newWrapper.nextElementSibling;
+        if (nextWrapper?.dataset?.blockId) {
+          await apiMoveBlock(newBlock.id, nextWrapper.dataset.blockId);
+        }
+        focusBlock(newWrapper);
       }
-      await loadDocument(activeDocId, { focusBlockId: newBlock.id });
     };
     try {
       const payload = await fetchDocument(documentId);
