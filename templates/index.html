@@ -1,11 +1,11 @@
 {% extends "base.html" %}
 
 {% block sidebar %}
-<div id="sidebar-tab" class="sidebar-tab" role="button" tabindex="0" aria-label="사이드바 토글" aria-expanded="true">
+<div id="sidebar-tab" class="sidebar-tab" role="button" tabindex="0" aria-label="사이드바 토글" aria-expanded="true" aria-controls="sidebar-panel">
   <span class="sidebar-tab-chevron"></span>
   <span class="sidebar-tab-label">문서</span>
 </div>
-<aside class="sidebar">
+<aside id="sidebar-panel" class="sidebar">
   <div class="sidebar-brand">
     <p class="eyebrow">Project Manager</p>
   </div>
