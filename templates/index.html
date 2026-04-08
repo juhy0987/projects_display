@@ -15,8 +15,13 @@
 
 {% block content %}
 <header class="topbar">
-  <h1>Block-based Project Manager</h1>
-  <p class="subcopy">텍스트, 이미지, 컨테이너 블록을 조합해 노션처럼 프로젝트 페이지를 구성합니다.</p>
+  <button id="sidebar-toggle-btn" class="sidebar-toggle-btn" aria-label="사이드바 토글" aria-expanded="true">
+    <span class="sidebar-toggle-icon"></span>
+  </button>
+  <div class="topbar-content">
+    <h1>Block-based Project Manager</h1>
+    <p class="subcopy">텍스트, 이미지, 컨테이너 블록을 조합해 노션처럼 프로젝트 페이지를 구성합니다.</p>
+  </div>
 </header>
 
 <section class="block-page" aria-live="polite">

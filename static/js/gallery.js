@@ -993,6 +993,23 @@ async function initGallery() {
     },
   };
 
+  // ── Sidebar toggle ────────────────────────────────────────────────────────
+  const sidebarToggleBtn = document.getElementById('sidebar-toggle-btn');
+  const SIDEBAR_KEY = 'sidebar-collapsed';
+
+  function applySidebarState(collapsed) {
+    document.body.classList.toggle('sidebar-collapsed', collapsed);
+    sidebarToggleBtn.setAttribute('aria-expanded', String(!collapsed));
+  }
+
+  applySidebarState(localStorage.getItem(SIDEBAR_KEY) === 'true');
+
+  sidebarToggleBtn.addEventListener('click', () => {
+    const collapsed = !document.body.classList.contains('sidebar-collapsed');
+    applySidebarState(collapsed);
+    localStorage.setItem(SIDEBAR_KEY, String(collapsed));
+  });
+
   // Close document menus and block more-menus when clicking outside
   document.addEventListener('click', () => {
     closeAllMenus(list);

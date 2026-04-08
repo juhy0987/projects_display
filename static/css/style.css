@@ -46,6 +46,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+  transition: transform 0.25s ease;
 }
 
 .sidebar-brand {
@@ -57,12 +58,61 @@ body {
   margin-left: var(--sidebar-w);
   flex: 1;
   min-width: 0;
+  transition: margin-left 0.25s ease;
+}
+
+/* ── Sidebar collapsed state ─────────────────────────────────────────────── */
+
+body.sidebar-collapsed .sidebar {
+  transform: translateX(-100%);
+}
+
+body.sidebar-collapsed .main-area {
+  margin-left: 0;
 }
 
 .topbar {
   max-width: 800px;
   margin: 0 auto;
   padding: 2.6rem 1.2rem 1.2rem;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.topbar-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.sidebar-toggle-btn {
+  flex-shrink: 0;
+  margin-top: 0.5rem;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 0.35rem 0.45rem;
+  border-radius: 6px;
+  color: var(--ink-soft);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, color 0.15s;
+}
+
+.sidebar-toggle-btn:hover {
+  background: var(--paper-deep);
+  color: var(--ink);
+}
+
+.sidebar-toggle-icon {
+  display: block;
+  width: 16px;
+  height: 12px;
+  background:
+    linear-gradient(currentColor 0%, currentColor 100%) 0 0   / 100% 2px no-repeat,
+    linear-gradient(currentColor 0%, currentColor 100%) 0 50% / 100% 2px no-repeat,
+    linear-gradient(currentColor 0%, currentColor 100%) 0 100% / 100% 2px no-repeat;
 }
 
 .eyebrow {
