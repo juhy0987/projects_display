@@ -293,7 +293,7 @@ body.sidebar-collapsed .sidebar-tab-chevron {
   padding-bottom: 0.85rem;
 }
 
-.block-page-header h2 {
+.block-page-header h1 {
   margin: 0;
   font-family: "Fraunces", serif;
   font-size: clamp(1.35rem, 3vw, 2.2rem);
