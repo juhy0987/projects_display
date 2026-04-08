@@ -161,7 +161,8 @@ export function wrapBlock(blockEl, block, parentBlockId = null, { addBlockAfter,
     }
   });
 
-  wrapper.addEventListener('dragover', (e) => {
+  // ── Drop target (blockEl only — action buttons excluded) ────────────────
+  blockEl.addEventListener('dragover', (e) => {
     if (!currentDragBlockId) return;
     // Only allow drops from same-parent siblings
     if (currentDragParentBlockId !== (parentBlockId ?? '')) return;
@@ -183,13 +184,13 @@ export function wrapBlock(blockEl, block, parentBlockId = null, { addBlockAfter,
     wrapper.classList.toggle('drop-below', !isAbove);
   });
 
-  wrapper.addEventListener('dragleave', (e) => {
-    if (!wrapper.contains(e.relatedTarget)) {
+  blockEl.addEventListener('dragleave', (e) => {
+    if (!blockEl.contains(e.relatedTarget)) {
       wrapper.classList.remove('drop-above', 'drop-below');
     }
   });
 
-  wrapper.addEventListener('drop', async (e) => {
+  blockEl.addEventListener('drop', async (e) => {
     e.preventDefault();
     e.stopPropagation();
     wrapper.classList.remove('drop-above', 'drop-below');
