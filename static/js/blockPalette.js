@@ -47,8 +47,11 @@ export function openBlockPalette(anchorEl, parentBlockId = null, onSelect = null
 
   anchorEl.after(palette);
 
-  // Deferred to avoid catching the event that triggered openBlockPalette
+  // Deferred to avoid catching the event that triggered openBlockPalette.
+  // Guard with isConnected: if close() was called before the timeout fires
+  // (e.g. an item was clicked immediately), skip registration to prevent a dangling listener.
   setTimeout(() => {
+    if (!palette.isConnected) return;
     function onOutside(e) {
       if (!palette.contains(e.target)) close();
     }
@@ -116,7 +119,10 @@ export function showBlockDeleteConfirm(wrapperEl, blockId, reloadDocument) {
     }
   });
 
+  // Guard with isConnected: if close() was called before the timeout fires
+  // (e.g. confirm/cancel was clicked immediately), skip registration to prevent a dangling listener.
   setTimeout(() => {
+    if (!dialog.isConnected) return;
     function onOutside(e) {
       if (!dialog.contains(e.target)) close();
     }
