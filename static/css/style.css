@@ -243,7 +243,7 @@ body {
   border: 1px solid #e2d8c4;
   border-radius: 12px;
   padding: 0.72rem 0.82rem;
-  min-height: 1.6em; /* prevent height shift when toggling contenteditable on empty blocks */
+  min-height: calc(1.6em + 1.44rem); /* = line-height + padding-top + padding-bottom; box-sizing: border-box이므로 padding을 포함해야 빈 블록 높이가 유지됨 */
 }
 
 .notion-image-wrap {
