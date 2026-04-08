@@ -84,7 +84,7 @@ async function apiMoveBlock(blockId, beforeBlockId) {
  * @param {string}      field     - JSON field name to patch (e.g. "text", "title")
  * @param {HTMLElement} notionBlock - The .notion-block ancestor for is-editing class
  */
-function enableContentEditable(el, blockId, field, notionBlock) {
+function enableContentEditable(el, blockId, field, notionBlock, { onEnter = null } = {}) {
   let originalText = '';
   let escaped = false;
 
@@ -107,9 +107,10 @@ function enableContentEditable(el, blockId, field, notionBlock) {
   });
 
   el.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
+    if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       el.blur();
+      if (onEnter) onEnter();
     } else if (e.key === 'Escape') {
       escaped = true;
       el.textContent = originalText;
@@ -521,7 +522,15 @@ function createTextBlock(block) {
   let originalText = node.textContent;
   let currentLevel = block.level ?? null;
 
-  enableContentEditable(node, block.id, 'text', node);
+  const parentBlockId = node.closest('[data-parent-block-id]')?.dataset.parentBlockId || null;
+  let suppressNextEnter = false;
+
+  enableContentEditable(node, block.id, 'text', node, {
+    onEnter: () => {
+      if (suppressNextEnter) { suppressNextEnter = false; return; }
+      if (addBlockAfter) addBlockAfter('text', block.id, parentBlockId || null);
+    },
+  });
 
   node.addEventListener('keydown', (e) => {
     // Slash command: open block palette when '/' is typed in an empty block
@@ -533,17 +542,18 @@ function createTextBlock(block) {
     }
 
     if (node.contentEditable !== 'true') return;
-    if (e.key !== 'Enter' && e.key !== ' ') return;
+    if (e.key !== ' ' && !(e.key === 'Enter' && !e.shiftKey)) return;
 
     // Markdown heading promotion: only when content is exactly #, ##, or ###
     const raw = node.textContent;
     const exactPrefix = raw.match(/^(#{1,3})$/);
     if (!exactPrefix) {
-      if (e.key === 'Enter') { e.preventDefault(); node.blur(); }
+      // Enter without heading prefix is handled by enableContentEditable's onEnter
       return;
     }
 
     e.preventDefault();
+    suppressNextEnter = true;
     const newLevel = exactPrefix[1].length;
     node.textContent = '';
     node.dataset.level = String(newLevel);
