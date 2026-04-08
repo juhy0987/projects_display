@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel
 
@@ -14,6 +16,7 @@ class BlockPatch(BaseModel):
   url: str | None = None
   caption: str | None = None
   title: str | None = None
+  level: Literal[1, 2, 3] | None = None
 
 
 class BlockPositionPatch(BaseModel):

@@ -139,6 +139,7 @@ const BLOCK_PALETTE_ITEMS = [
   { type: 'text', label: '텍스트', icon: 'T' },
   { type: 'image', label: '이미지', icon: '▣' },
   { type: 'container', label: '컨테이너', icon: '⊞' },
+  { type: 'divider', label: '구분선', icon: '—' },
 ];
 
 /**
@@ -443,16 +444,71 @@ function createTextBlock(block) {
   const template = document.getElementById('text-block-template');
   const node = template.content.firstElementChild.cloneNode(true);
   node.textContent = block.text;
+
+  // Apply heading level if present
+  if (block.level) node.dataset.level = String(block.level);
+
+  let originalText = node.textContent;
+  let currentLevel = block.level ?? null;
+
   enableContentEditable(node, block.id, 'text', node);
 
-  // Slash command: open block palette when '/' is typed in an empty block
   node.addEventListener('keydown', (e) => {
+    // Slash command: open block palette when '/' is typed in an empty block
     if (e.key === '/' && node.contentEditable === 'true' && !node.textContent.trim()) {
       e.preventDefault();
-      node.blur(); // commit any in-progress edit (e.g. cleared text) before opening palette
+      node.blur();
       openBlockPalette(node);
+      return;
+    }
+
+    if (node.contentEditable !== 'true') return;
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+
+    // Markdown heading promotion: only when content is exactly #, ##, or ###
+    const raw = node.textContent;
+    const exactPrefix = raw.match(/^(#{1,3})$/);
+    if (!exactPrefix) {
+      if (e.key === 'Enter') { e.preventDefault(); node.blur(); }
+      return;
+    }
+
+    e.preventDefault();
+    const newLevel = exactPrefix[1].length;
+    node.textContent = '';
+    node.dataset.level = String(newLevel);
+
+    const patch = {};
+    if (newLevel !== currentLevel) patch.level = newLevel;
+    if ('' !== originalText) patch.text = '';
+    if (Object.keys(patch).length) {
+      currentLevel = newLevel;
+      originalText = '';
+      apiPatchBlock(block.id, patch).catch(console.error);
     }
   });
+
+  // On blur: also handle pasted "# Title" form (prefix + mandatory whitespace)
+  node.addEventListener('blur', () => {
+    if (node.contentEditable !== 'false') return; // enableContentEditable already committed
+    const raw = node.textContent;
+    const match = raw.match(/^(#{1,3})\s+(\S.*)?$/);
+    if (!match) return;
+
+    const newLevel = match[1].length;
+    const newText = (match[2] ?? '').trimEnd();
+    node.textContent = newText;
+    node.dataset.level = String(newLevel);
+
+    const patch = {};
+    if (newLevel !== currentLevel) patch.level = newLevel;
+    if (newText !== originalText) patch.text = newText;
+    if (Object.keys(patch).length) {
+      currentLevel = newLevel;
+      originalText = newText;
+      apiPatchBlock(block.id, patch).catch(console.error);
+    }
+  }, true); // capture: runs after enableContentEditable's blur
 
   return node;
 }
@@ -571,6 +627,11 @@ function createContainerBlock(block) {
   return node;
 }
 
+function createDividerBlock() {
+  const template = document.getElementById('divider-block-template');
+  return template.content.firstElementChild.cloneNode(true);
+}
+
 function createPageBlock(block) {
   const template = document.getElementById('page-block-template');
   const node = template.content.firstElementChild.cloneNode(true);
@@ -592,6 +653,9 @@ function renderBlock(block, parentBlockId = null) {
       break;
     case 'container':
       blockEl = createContainerBlock(block);
+      break;
+    case 'divider':
+      blockEl = createDividerBlock();
       break;
     case 'page':
       blockEl = createPageBlock(block);

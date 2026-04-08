@@ -8,7 +8,7 @@ from pydantic import TypeAdapter
 from sqlalchemy import delete, func, select, text, update
 from sqlalchemy.orm import Session
 
-from app.models.blocks import Block, BlockDocument, ContainerBlock, PageBlock
+from app.models.blocks import Block, BlockDocument, ContainerBlock, DividerBlock, PageBlock
 from app.models.orm import BlockRow, DocumentRow
 
 
@@ -70,6 +70,11 @@ class SQLiteBlockRepository:
       for item in children_by_parent.get(parent_id, []):
         if item["type"] == "container":
           nodes.append(ContainerBlock.model_validate({**item, "children": build_nodes(item["id"])}))
+        elif item["type"] == "heading":
+          # heading은 TextBlock으로 통합 — 기존 DB 데이터 하위 호환
+          nodes.append(self._block_adapter.validate_python({**item, "type": "text"}))
+        elif item["type"] == "divider":
+          nodes.append(DividerBlock.model_validate(item))
         elif item["type"] == "page":
           nodes.append(PageBlock.model_validate({
             **item,
@@ -139,6 +144,8 @@ class SQLiteBlockRepository:
         default_content = {"url": "", "caption": ""}
       case "container":
         default_content = {"title": "", "layout": "vertical"}
+      case "divider":
+        default_content = {}
       case _:
         return None
 

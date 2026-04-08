@@ -334,6 +334,36 @@ body {
   color: #6f3f37;
 }
 
+/* ── Heading via TextBlock (data-level) ──────────────────────────────────── */
+
+.notion-text[data-level="1"] {
+  font-family: "Fraunces", serif;
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.notion-text[data-level="2"] {
+  font-family: "Fraunces", serif;
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.notion-text[data-level="3"] {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+/* ── Divider block ───────────────────────────────────────────────────────── */
+
+.notion-divider {
+  border: none;
+  border-top: 1px solid var(--line);
+  margin: 0.25rem 0;
+}
+
 /* ── Inline editing ──────────────────────────────────────────────────────── */
 
 .notion-block.is-editing {
