@@ -228,7 +228,7 @@ body {
 
 .block-root {
   display: grid;
-  gap: 0.78rem;
+  gap: 0.39rem;
   padding-left: 48px;
 }
 
@@ -242,7 +242,7 @@ body {
   background: transparent;
   border: none;
   border-radius: 0;
-  padding: 0.32rem 0.2rem;
+  padding: 0.32rem;
   min-height: calc(1.6em + 0.64rem); /* line-height + padding-top + padding-bottom */
 }
 
@@ -285,7 +285,7 @@ body {
 
 .container-children {
   display: grid;
-  gap: 0.68rem;
+  gap: 0.34rem;
   padding-left: 48px;
 }
 
