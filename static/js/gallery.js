@@ -607,17 +607,18 @@ function createHeadingBlock(block) {
     }
     if (e.key !== 'Enter' && e.key !== ' ') return;
 
-    // Detect markdown-style prefix: #, ##, ### followed by space or enter
+    // Transform only when the entire content is exactly #, ##, or ### (no trailing text).
+    // This matches Notion's behavior: typing "# " on an empty/pure-hash line promotes level.
     const raw = textEl.textContent;
-    const match = raw.match(/^(#{1,3})\s*/);
-    if (!match) {
+    const exactPrefix = raw.match(/^(#{1,3})$/);
+    if (!exactPrefix) {
       if (e.key === 'Enter') { e.preventDefault(); textEl.blur(); }
       return;
     }
 
     e.preventDefault();
-    const newLevel = match[1].length;
-    const newText = raw.slice(match[0].length);
+    const newLevel = exactPrefix[1].length;
+    const newText = '';
 
     textEl.textContent = newText;
     node.dataset.level = String(newLevel);
@@ -630,9 +631,8 @@ function createHeadingBlock(block) {
       originalText = newText;
       apiPatchBlock(block.id, patch).catch(console.error);
     }
-
-    textEl.contentEditable = 'false';
-    node.classList.remove('is-editing');
+    // Stay in editing mode so the user can continue typing the heading text
+    textEl.focus();
   });
 
   textEl.addEventListener('blur', () => {
@@ -642,9 +642,10 @@ function createHeadingBlock(block) {
     if (escaped) { escaped = false; return; }
 
     const raw = textEl.textContent;
-    const match = raw.match(/^(#{1,3})\s*/);
+    // On blur, allow "# Title" (prefix + mandatory whitespace + text) from paste/etc.
+    const match = raw.match(/^(#{1,3})\s+(\S.*)?$/);
     const newLevel = match ? match[1].length : block.level;
-    const newText = match ? raw.slice(match[0].length) : raw.trim();
+    const newText = match ? (match[2] ?? '').trimEnd() : raw.trim();
 
     textEl.textContent = newText;
     node.dataset.level = String(newLevel);

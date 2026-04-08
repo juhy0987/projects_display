@@ -368,7 +368,7 @@ body {
   color: var(--ink-soft);
 }
 
-.notion-heading:not([contenteditable="true"]):hover {
+.notion-heading:not(.is-editing):hover {
   cursor: text;
   background: rgba(0, 0, 0, 0.03);
   border-radius: 4px;
