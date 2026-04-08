@@ -56,6 +56,15 @@ async function apiDeleteBlock(blockId) {
   if (!res.ok) throw new Error('Failed to delete block');
 }
 
+async function apiChangeBlockType(blockId, type) {
+  const res = await fetch(`/api/blocks/${blockId}/type`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ type }),
+  });
+  if (!res.ok) throw new Error('Failed to change block type');
+}
+
 async function apiMoveBlock(blockId, beforeBlockId) {
   const res = await fetch(`/api/blocks/${blockId}/position`, {
     method: 'PATCH',
@@ -126,6 +135,7 @@ function enableContentEditable(el, blockId, field, notionBlock) {
 // knowing about the active document or load function.
 let navigateTo = null;
 let addBlock = null; // (type, parentBlockId?) => Promise<void>
+let addBlockAfter = null; // (type, afterBlockId, parentBlockId?) => Promise<void>
 let reloadDocument = null; // () => void — reload the active document
 
 // ── Drag state ────────────────────────────────────────────────────────────────
@@ -142,13 +152,21 @@ const BLOCK_PALETTE_ITEMS = [
   { type: 'divider', label: '구분선', icon: '—' },
 ];
 
+const BLOCK_TYPE_ICONS = {
+  text: 'T',
+  image: '▣',
+  container: '⊞',
+  divider: '—',
+  page: '⊡',
+};
+
 /**
  * Show the block type selection palette below anchorEl.
- * Calls addBlock(type) on selection.
  * @param {HTMLElement} anchorEl - Element to position the palette after
  * @param {string|null} parentBlockId - Optional parent block id
+ * @param {function|null} onSelect - Optional override: called with (type) instead of addBlock
  */
-function openBlockPalette(anchorEl, parentBlockId = null) {
+function openBlockPalette(anchorEl, parentBlockId = null, onSelect = null) {
   document.querySelectorAll('.block-palette').forEach((p) => p.remove());
 
   const palette = document.createElement('div');
@@ -171,7 +189,8 @@ function openBlockPalette(anchorEl, parentBlockId = null) {
     btn.addEventListener('mousedown', (e) => e.preventDefault());
     btn.addEventListener('click', async () => {
       close();
-      if (addBlock) await addBlock(type, parentBlockId);
+      if (onSelect) await onSelect(type);
+      else if (addBlock) await addBlock(type, parentBlockId);
     });
     palette.appendChild(btn);
   });
@@ -288,46 +307,96 @@ function wrapBlock(blockEl, block, parentBlockId = null) {
   const actions = document.createElement('div');
   actions.className = 'block-actions';
 
-  // Drag handle
+  // Drag handle — also opens action dropdown on click
+  const dragWrap = document.createElement('div');
+  dragWrap.className = 'block-more-wrap';
+
   const dragHandle = document.createElement('button');
   dragHandle.type = 'button';
   dragHandle.className = 'block-drag-handle';
-  dragHandle.setAttribute('aria-label', '드래그하여 이동');
+  dragHandle.setAttribute('aria-label', '이동 / 블록 액션');
   dragHandle.textContent = '⠿';
-
-  // More button + menu
-  const moreWrap = document.createElement('div');
-  moreWrap.className = 'block-more-wrap';
-
-  const moreBtn = document.createElement('button');
-  moreBtn.type = 'button';
-  moreBtn.className = 'block-more-btn';
-  moreBtn.setAttribute('aria-label', '더보기');
-  moreBtn.textContent = '⋯';
 
   const moreMenu = document.createElement('div');
   moreMenu.className = 'block-more-menu';
   moreMenu.hidden = true;
 
+  // Type change section (only for non-page blocks)
+  const isPageBlock = block.type === 'page';
+  if (!isPageBlock) {
+    const sectionLabel = document.createElement('div');
+    sectionLabel.className = 'block-menu-section-label';
+    sectionLabel.textContent = '타입 변경';
+    moreMenu.appendChild(sectionLabel);
+
+    BLOCK_PALETTE_ITEMS.forEach(({ type, label, icon }) => {
+      const changeBtn = document.createElement('button');
+      changeBtn.type = 'button';
+      changeBtn.className = 'block-change-type-btn';
+      if (type === block.type) changeBtn.classList.add('is-current');
+      changeBtn.innerHTML = `<span class="block-menu-icon">${icon}</span>${label}`;
+      changeBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        moreMenu.hidden = true;
+        if (type === block.type) return;
+        try {
+          await apiChangeBlockType(block.id, type);
+          if (reloadDocument) reloadDocument();
+        } catch (err) {
+          console.error('블록 타입 변경 실패:', err);
+        }
+      });
+      moreMenu.appendChild(changeBtn);
+    });
+
+    const menuDivider = document.createElement('div');
+    menuDivider.className = 'block-menu-divider';
+    moreMenu.appendChild(menuDivider);
+  }
+
+  // Delete action
   const deleteBtn = document.createElement('button');
   deleteBtn.type = 'button';
   deleteBtn.className = 'block-delete-btn';
   deleteBtn.textContent = '삭제';
-
   moreMenu.appendChild(deleteBtn);
-  moreWrap.appendChild(moreBtn);
-  moreWrap.appendChild(moreMenu);
-  actions.appendChild(dragHandle);
-  actions.appendChild(moreWrap);
+
+  dragWrap.appendChild(dragHandle);
+  dragWrap.appendChild(moreMenu);
+
+  // Insert below button
+  const insertBtn = document.createElement('button');
+  insertBtn.type = 'button';
+  insertBtn.className = 'block-insert-btn';
+  insertBtn.setAttribute('aria-label', '아래에 블록 추가');
+  insertBtn.textContent = '+';
+
+  actions.appendChild(insertBtn);
+  actions.appendChild(dragWrap);
   wrapper.appendChild(actions);
   wrapper.appendChild(blockEl);
 
-  // ── More menu toggle ──────────────────────────────────────────────────────
-  moreBtn.addEventListener('click', (e) => {
+  // ── Drag handle click → action dropdown ──────────────────────────────────
+  let dragDidStart = false;
+
+  dragHandle.addEventListener('click', (e) => {
     e.stopPropagation();
+    if (dragDidStart) {
+      dragDidStart = false;
+      return;
+    }
     const wasHidden = moreMenu.hidden;
     document.querySelectorAll('.block-more-menu').forEach((m) => (m.hidden = true));
     moreMenu.hidden = !wasHidden;
+  });
+
+  // ── Insert below ─────────────────────────────────────────────────────────
+  insertBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    document.querySelectorAll('.block-more-menu').forEach((m) => (m.hidden = true));
+    openBlockPalette(wrapper, parentBlockId, async (type) => {
+      if (addBlockAfter) await addBlockAfter(type, block.id, parentBlockId);
+    });
   });
 
   // ── Delete with confirmation ──────────────────────────────────────────────
@@ -355,6 +424,7 @@ function wrapBlock(blockEl, block, parentBlockId = null) {
       e.preventDefault();
       return;
     }
+    dragDidStart = true;
     currentDragBlockId = block.id;
     currentDragParentBlockId = parentBlockId ?? '';
     e.dataTransfer.effectAllowed = 'move';
@@ -684,8 +754,6 @@ function renderDocument(documentPayload) {
   documentPayload.blocks.forEach((block) => {
     root.appendChild(renderBlock(block));
   });
-
-  root.appendChild(createBlockAdder());
 }
 
 // ── Document list helpers ────────────────────────────────────────────────────
@@ -843,8 +911,27 @@ async function initGallery() {
       await apiCreateBlock(activeDocId, type, parentBlockId);
       await loadDocument(activeDocId, { focusNewBlock: true });
     };
+    addBlockAfter = async (type, afterBlockId, parentBlockId = null) => {
+      const newBlock = await apiCreateBlock(activeDocId, type, parentBlockId);
+      const currentWrapper = document.querySelector(`[data-block-id="${afterBlockId}"]`);
+      const nextWrapper = currentWrapper?.nextElementSibling;
+      if (nextWrapper?.dataset?.blockId) {
+        await apiMoveBlock(newBlock.id, nextWrapper.dataset.blockId);
+      }
+      await loadDocument(activeDocId, { focusNewBlock: true });
+    };
     try {
       const payload = await fetchDocument(documentId);
+
+      // Ensure the last root-level block is always an empty text block
+      const rootBlocks = payload.blocks;
+      const lastBlock = rootBlocks[rootBlocks.length - 1];
+      if (!lastBlock || lastBlock.type !== 'text') {
+        await apiCreateBlock(activeDocId, 'text');
+        await loadDocument(documentId, { focusNewBlock });
+        return;
+      }
+
       renderDocument(payload);
       if (focusNewBlock) {
         const topWrappers = root.querySelectorAll(':scope > .block-wrapper');
