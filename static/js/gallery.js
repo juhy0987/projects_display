@@ -133,14 +133,23 @@ function openBlockPalette(anchorEl, parentBlockId = null) {
   const palette = document.createElement('div');
   palette.className = 'block-palette';
 
+  let removeOutsideListener = () => {};
+
+  function close() {
+    palette.remove();
+    removeOutsideListener();
+  }
+
   BLOCK_PALETTE_ITEMS.forEach(({ type, label, icon }) => {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'block-palette-item';
     btn.innerHTML = `<span class="block-palette-icon">${icon}</span>${label}`;
-    btn.addEventListener('mousedown', async (e) => {
-      e.preventDefault(); // keep focus on text block so blur doesn't fire early
-      palette.remove();
+    // mousedown: prevent blur on the text block so the editing state is preserved
+    // until we explicitly commit it; click: actually perform the selection
+    btn.addEventListener('mousedown', (e) => e.preventDefault());
+    btn.addEventListener('click', async () => {
+      close();
       if (addBlock) await addBlock(type, parentBlockId);
     });
     palette.appendChild(btn);
@@ -148,15 +157,13 @@ function openBlockPalette(anchorEl, parentBlockId = null) {
 
   anchorEl.after(palette);
 
-  // Close on outside click (deferred to avoid catching the triggering click)
+  // Deferred to avoid catching the event that triggered openBlockPalette
   setTimeout(() => {
     function onOutside(e) {
-      if (!palette.contains(e.target)) {
-        palette.remove();
-        document.removeEventListener('click', onOutside, true);
-      }
+      if (!palette.contains(e.target)) close();
     }
     document.addEventListener('click', onOutside, true);
+    removeOutsideListener = () => document.removeEventListener('click', onOutside, true);
   }, 0);
 }
 
@@ -191,6 +198,7 @@ function createTextBlock(block) {
   node.addEventListener('keydown', (e) => {
     if (e.key === '/' && node.contentEditable === 'true' && !node.textContent.trim()) {
       e.preventDefault();
+      node.blur(); // commit any in-progress edit (e.g. cleared text) before opening palette
       openBlockPalette(node);
     }
   });
@@ -514,9 +522,16 @@ async function initGallery() {
       const payload = await fetchDocument(documentId);
       renderDocument(payload);
       if (focusNewBlock) {
-        const notionBlocks = root.querySelectorAll('.notion-block');
-        if (notionBlocks.length > 0) {
-          notionBlocks[notionBlocks.length - 1].click();
+        // Use :scope > to target only top-level blocks, excluding nested blocks inside containers
+        const topBlocks = root.querySelectorAll(':scope > .notion-block');
+        if (topBlocks.length > 0) {
+          const lastBlock = topBlocks[topBlocks.length - 1];
+          // For text blocks the element itself is the click target;
+          // for image/container, fall back to a focusable descendant
+          const focusTarget = lastBlock.classList.contains('notion-text')
+            ? lastBlock
+            : (lastBlock.querySelector('.notion-caption, .container-title') ?? lastBlock);
+          focusTarget.click();
         }
       }
     } catch (err) {

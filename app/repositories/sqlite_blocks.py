@@ -207,6 +207,14 @@ class SQLiteBlockRepository:
       if conn.execute("SELECT 1 FROM documents WHERE id = ?", (document_id,)).fetchone() is None:
         return None
 
+      if parent_block_id is not None:
+        parent_row = conn.execute(
+          "SELECT 1 FROM blocks WHERE id = ? AND document_id = ?",
+          (parent_block_id, document_id),
+        ).fetchone()
+        if parent_row is None:
+          return None
+
       row = conn.execute(
         "SELECT COALESCE(MAX(position), 0) FROM blocks WHERE document_id = ? AND parent_block_id IS ?",
         (document_id, parent_block_id),
