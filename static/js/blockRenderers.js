@@ -4,6 +4,16 @@ import { apiPatchBlock, apiUploadImage } from "./api.js";
 import { enableContentEditable } from "./editor.js";
 import { openBlockPalette } from "./blockPalette.js";
 import { wrapBlock } from "./blockWrapper.js";
+import {
+  initFormattingToolbar,
+  sanitizeHtml,
+  setEditingNode,
+  clearEditingNode,
+  isInsideToolbar,
+} from "./formattingToolbar.js";
+
+// Initialise singleton toolbar once
+initFormattingToolbar();
 
 /**
  * Callbacks set by main.js before rendering begins.
@@ -22,28 +32,94 @@ export const callbacks = {
 function createTextBlock(block) {
   const template = document.getElementById('text-block-template');
   const node = template.content.firstElementChild.cloneNode(true);
-  node.textContent = block.text;
 
-  // Apply heading level if present
+  // Render formatted HTML when available, fall back to plain text
+  if (block.formatted_text) {
+    node.innerHTML = sanitizeHtml(block.formatted_text);
+  } else {
+    node.textContent = block.text;
+  }
+
   if (block.level) node.dataset.level = String(block.level);
 
+  let originalHtml = node.innerHTML;
   let originalText = node.textContent;
   let currentLevel = block.level ?? null;
+  let escaped = false;
 
-  enableContentEditable(node, block.id, 'text', node, {
-    onEnter: () => {
-      const parentBlockId =
-        node.closest('.block-wrapper')?.dataset.parentBlockId || null;
-      if (callbacks.addBlockAfter) {
-        callbacks.addBlockAfter('text', block.id, parentBlockId).catch(console.error);
+  // ── Click: activate editing (but let link clicks open the URL) ──────────
+  node.addEventListener('click', (e) => {
+    // When not editing, a click on a link should navigate, not start editing
+    if (node.contentEditable !== 'true') {
+      const anchor = e.target.closest('a[href]');
+      if (anchor) {
+        e.stopPropagation();
+        window.open(anchor.href, '_blank', 'noopener,noreferrer');
+        return;
       }
-    },
+    }
+    if (node.contentEditable === 'true') return;
+    originalHtml = node.innerHTML;
+    originalText = node.textContent;
+    escaped = false;
+    node.contentEditable = 'true';
+    node.classList.add('is-editing');
+    setEditingNode(node);
+    node.focus();
+    const sel = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    range.collapse(false);
+    if (sel) { sel.removeAllRanges(); sel.addRange(range); }
   });
 
-  // Registered in capture phase to preempt enableContentEditable's bubble-phase Enter handler,
-  // preventing spurious block creation when heading promotion intercepts the keystroke.
+  // ── Blur: save and deactivate ────────────────────────────────────────────
+  node.addEventListener('blur', (e) => {
+    // Focus moved into the formatting toolbar (e.g. link input) — stay in editing mode
+    if (isInsideToolbar(e.relatedTarget)) return;
+    if (node.contentEditable !== 'true') return;
+    node.contentEditable = 'false';
+    node.classList.remove('is-editing');
+    clearEditingNode();
+
+    if (escaped) { escaped = false; return; }
+
+    // Handle pasted "# Title" heading promotion form
+    const raw = node.textContent;
+    const headingMatch = raw.match(/^(#{1,3})\s+(\S.*)?$/);
+    if (headingMatch) {
+      const newLevel = headingMatch[1].length;
+      const newText = (headingMatch[2] ?? '').trimEnd();
+      node.textContent = newText;
+      node.dataset.level = String(newLevel);
+      const patch = {};
+      if (newLevel !== currentLevel) patch.level = newLevel;
+      if (newText !== originalText) patch.text = newText;
+      patch.formatted_text = '';
+      currentLevel = newLevel;
+      originalText = newText;
+      originalHtml = node.innerHTML;
+      apiPatchBlock(block.id, patch).catch(console.error);
+      return;
+    }
+
+    // Normal save: patch both text and formatted_text when changed
+    const newText = node.textContent.trim();
+    const newHtml = sanitizeHtml(node.innerHTML);
+    const patch = {};
+    if (newText !== originalText) patch.text = newText;
+    if (newHtml !== sanitizeHtml(originalHtml)) patch.formatted_text = newHtml;
+    if (Object.keys(patch).length) {
+      originalText = newText;
+      originalHtml = node.innerHTML;
+      apiPatchBlock(block.id, patch).catch(console.error);
+    }
+  });
+
+  // ── Keydown: formatting shortcuts + heading promotion + slash command ────
+  // Capture phase: intercepts Enter/Space for heading promotion before bubble handlers
   node.addEventListener('keydown', (e) => {
-    // Slash command: open block palette when '/' is typed in an empty block
+    // Slash command: open palette when '/' is typed in an empty block
     if (e.key === '/' && node.contentEditable === 'true' && !node.textContent.trim()) {
       e.preventDefault();
       node.blur();
@@ -52,53 +128,70 @@ function createTextBlock(block) {
     }
 
     if (node.contentEditable !== 'true') return;
-    if (e.key !== ' ' && !(e.key === 'Enter' && !e.shiftKey)) return;
 
-    // Markdown heading promotion: only when content is exactly #, ##, or ###
-    const raw = node.textContent;
-    const exactPrefix = raw.match(/^(#{1,3})$/);
-    if (!exactPrefix) {
-      // Enter without heading prefix is handled by enableContentEditable's onEnter
+    // Escape: cancel editing and restore original content
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      escaped = true;
+      node.innerHTML = originalHtml;
+      node.contentEditable = 'false';
+      node.classList.remove('is-editing');
+      clearEditingNode();
       return;
     }
 
-    e.preventDefault();
-    e.stopImmediatePropagation();
-    const newLevel = exactPrefix[1].length;
-    node.textContent = '';
-    node.dataset.level = String(newLevel);
+    // Enter (no shift): either new block or heading promotion
+    if (e.key === 'Enter' && !e.shiftKey) {
+      const raw = node.textContent;
+      const exactPrefix = raw.match(/^(#{1,3})$/);
+      if (exactPrefix) {
+        // Heading promotion
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        const newLevel = exactPrefix[1].length;
+        node.textContent = '';
+        node.dataset.level = String(newLevel);
+        const patch = { level: newLevel, text: '', formatted_text: '' };
+        currentLevel = newLevel;
+        originalText = '';
+        originalHtml = '';
+        apiPatchBlock(block.id, patch).catch(console.error);
+        return;
+      }
+      e.preventDefault();
+      node.blur();
+      const parentBlockId =
+        node.closest('.block-wrapper')?.dataset.parentBlockId || null;
+      if (callbacks.addBlockAfter) {
+        callbacks.addBlockAfter('text', block.id, parentBlockId).catch(console.error);
+      }
+      return;
+    }
 
-    const patch = {};
-    if (newLevel !== currentLevel) patch.level = newLevel;
-    if ('' !== originalText) patch.text = '';
-    if (Object.keys(patch).length) {
+    // Space: heading promotion when content is exactly #, ##, or ###
+    if (e.key === ' ') {
+      const raw = node.textContent;
+      const exactPrefix = raw.match(/^(#{1,3})$/);
+      if (!exactPrefix) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      const newLevel = exactPrefix[1].length;
+      node.textContent = '';
+      node.dataset.level = String(newLevel);
+      const patch = { level: newLevel, text: '', formatted_text: '' };
       currentLevel = newLevel;
       originalText = '';
+      originalHtml = '';
       apiPatchBlock(block.id, patch).catch(console.error);
+    }
+
+    // Formatting keyboard shortcuts (Ctrl/Cmd + B / I / U)
+    if (e.ctrlKey || e.metaKey) {
+      if (e.key === 'b') { e.preventDefault(); document.execCommand('bold', false); }
+      else if (e.key === 'i') { e.preventDefault(); document.execCommand('italic', false); }
+      else if (e.key === 'u') { e.preventDefault(); document.execCommand('underline', false); }
     }
   }, { capture: true });
-
-  // On blur: also handle pasted "# Title" form (prefix + mandatory whitespace)
-  node.addEventListener('blur', () => {
-    if (node.contentEditable !== 'false') return; // enableContentEditable already committed
-    const raw = node.textContent;
-    const match = raw.match(/^(#{1,3})\s+(\S.*)?$/);
-    if (!match) return;
-
-    const newLevel = match[1].length;
-    const newText = (match[2] ?? '').trimEnd();
-    node.textContent = newText;
-    node.dataset.level = String(newLevel);
-
-    const patch = {};
-    if (newLevel !== currentLevel) patch.level = newLevel;
-    if (newText !== originalText) patch.text = newText;
-    if (Object.keys(patch).length) {
-      currentLevel = newLevel;
-      originalText = newText;
-      apiPatchBlock(block.id, patch).catch(console.error);
-    }
-  }, true); // capture: runs after enableContentEditable's blur
 
   return node;
 }

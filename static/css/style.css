@@ -869,6 +869,208 @@ body.sidebar-collapsed .sidebar-tab-chevron {
   border-color: #a83030;
 }
 
+/* ── Formatting toolbar ──────────────────────────────────────────────────── */
+
+.formatting-toolbar {
+  position: absolute;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 6px;
+  background: #2f2f2f;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px -4px rgba(0, 0, 0, 0.35);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+  white-space: nowrap;
+}
+
+.formatting-toolbar.is-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.fmt-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: #e8e8e8;
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.1s;
+  flex-shrink: 0;
+}
+
+.fmt-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.fmt-btn.is-active {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+
+.fmt-divider {
+  width: 1px;
+  height: 18px;
+  background: rgba(255, 255, 255, 0.2);
+  margin: 0 2px;
+  flex-shrink: 0;
+}
+
+.fmt-color-btn {
+  position: relative;
+}
+
+.fmt-color-swatch {
+  display: block;
+  width: 14px;
+  height: 14px;
+  border-radius: 2px;
+  background: currentColor;
+  border: 1.5px solid rgba(255, 255, 255, 0.4);
+  pointer-events: none;
+}
+
+/* Color picker dropdown */
+.fmt-color-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 8px 20px -6px var(--shadow);
+  padding: 8px;
+  display: none;
+  width: 180px;
+  z-index: 101;
+  animation: fade-slide-up 0.12s ease both;
+}
+
+.fmt-color-panel.is-open {
+  display: block;
+}
+
+.fmt-color-section-label {
+  font-size: 0.72rem;
+  color: var(--ink-soft);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 4px;
+  padding: 0 2px;
+}
+
+.fmt-color-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.fmt-color-swatch-btn {
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  border: 1.5px solid rgba(0, 0, 0, 0.12);
+  cursor: pointer;
+  transition: transform 0.1s, border-color 0.1s;
+  padding: 0;
+}
+
+.fmt-color-swatch-btn:hover {
+  transform: scale(1.15);
+  border-color: var(--accent);
+}
+
+.fmt-color-swatch-btn.is-default {
+  background: linear-gradient(to bottom right, #fff 45%, #e0e0e0 55%);
+  position: relative;
+}
+
+/* Link input inside toolbar */
+.fmt-link-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 8px 20px -6px var(--shadow);
+  padding: 8px;
+  display: none;
+  min-width: 260px;
+  z-index: 101;
+  animation: fade-slide-up 0.12s ease both;
+}
+
+.fmt-link-panel.is-open {
+  display: flex;
+  gap: 6px;
+}
+
+.fmt-link-input {
+  flex: 1;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0.38rem 0.55rem;
+  font-family: inherit;
+  font-size: 0.85rem;
+  color: var(--ink);
+  background: var(--paper);
+  outline: none;
+}
+
+.fmt-link-input:focus {
+  border-color: var(--accent);
+}
+
+.fmt-link-confirm {
+  border: none;
+  border-radius: 6px;
+  background: var(--accent);
+  color: #fff;
+  padding: 0.38rem 0.7rem;
+  font-family: inherit;
+  font-size: 0.82rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+/* ── Inline formatting elements ──────────────────────────────────────────── */
+
+.notion-text code,
+.notion-text code * {
+  font-family: "SFMono-Regular", "Consolas", "Liberation Mono", monospace;
+  font-size: 0.875em;
+  background: rgba(135, 131, 120, 0.15);
+  color: #eb5757;
+  border-radius: 3px;
+  padding: 0.1em 0.3em;
+}
+
+.notion-text a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.notion-text a:hover {
+  opacity: 0.75;
+}
+
 @keyframes fade-slide-up {
   from {
     opacity: 0;

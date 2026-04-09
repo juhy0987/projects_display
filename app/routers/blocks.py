@@ -17,6 +17,7 @@ class BlockPatch(BaseModel):
   caption: str | None = None
   title: str | None = None
   level: Literal[1, 2, 3] | None = None
+  formatted_text: str | None = None  # HTML string with inline formatting
 
 
 class BlockPositionPatch(BaseModel):

@@ -18,6 +18,7 @@ class TextBlock(BlockBase):
   type: Literal["text"]
   text: str
   level: Literal[1, 2, 3] | None = None
+  formatted_text: str | None = None  # HTML string with inline formatting
 
 
 class ImageBlock(BlockBase):
