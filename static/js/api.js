@@ -65,6 +65,17 @@ export async function apiChangeBlockType(blockId, type) {
   if (!res.ok) throw new Error('Failed to change block type');
 }
 
+export async function apiUploadImage(file) {
+  const form = new FormData();
+  form.append('file', file);
+  const res = await fetch('/api/upload', { method: 'POST', body: form });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail ?? 'Failed to upload image');
+  }
+  return res.json();
+}
+
 export async function apiMoveBlock(blockId, beforeBlockId) {
   const res = await fetch(`/api/blocks/${blockId}/position`, {
     method: 'PATCH',
