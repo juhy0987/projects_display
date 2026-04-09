@@ -46,8 +46,17 @@ function createTextBlock(block) {
   let currentLevel = block.level ?? null;
   let escaped = false;
 
-  // ── Click: activate editing ──────────────────────────────────────────────
-  node.addEventListener('click', () => {
+  // ── Click: activate editing (but let link clicks open the URL) ──────────
+  node.addEventListener('click', (e) => {
+    // When not editing, a click on a link should navigate, not start editing
+    if (node.contentEditable !== 'true') {
+      const anchor = e.target.closest('a[href]');
+      if (anchor) {
+        e.stopPropagation();
+        window.open(anchor.href, '_blank', 'noopener,noreferrer');
+        return;
+      }
+    }
     if (node.contentEditable === 'true') return;
     originalHtml = node.innerHTML;
     originalText = node.textContent;
