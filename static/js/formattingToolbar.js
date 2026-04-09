@@ -100,32 +100,36 @@ function restoreSelection() {
   }
 }
 
-// ── Inline code apply (no-op if already inside <code>) ───────────────────────
+// ── Inline code toggle ────────────────────────────────────────────────────────
+//
+// - Entire selection in one <code>  → unwrap
+// - Partial <code> or none          → strip any nested codes, wrap all in one <code>
 
-function applyInlineCode() {
+function getCodeAncestor(node) {
+  const el = node.nodeType === Node.TEXT_NODE ? node.parentElement : node;
+  return el?.closest("code") ?? null;
+}
+
+function toggleInlineCode() {
   const sel = window.getSelection();
   if (!sel || !sel.rangeCount || sel.isCollapsed) return;
   const range = sel.getRangeAt(0);
-  const ancestor = range.commonAncestorContainer;
-  const alreadyCode =
-    ancestor.nodeType === Node.ELEMENT_NODE
-      ? ancestor.closest("code")
-      : ancestor.parentElement?.closest("code");
 
-  // Skip if the selection is already inside a <code> element
-  if (alreadyCode) return;
+  const startCode = getCodeAncestor(range.startContainer);
+  const endCode = getCodeAncestor(range.endContainer);
 
-  try {
-    const code = document.createElement("code");
-    range.surroundContents(code);
-  } catch {
-    // surroundContents fails when range spans multiple block elements; fall back
-    const frag = range.extractContents();
-    const code = document.createElement("code");
-    code.appendChild(frag);
-    range.insertNode(code);
+  // Entire selection is within the same <code> → unwrap it
+  if (startCode && startCode === endCode) {
+    startCode.replaceWith(...startCode.childNodes);
+    return;
   }
-  }
+
+  // Partial or no code → extract, flatten nested codes, wrap in one new <code>
+  const frag = range.extractContents();
+  frag.querySelectorAll("code").forEach((c) => c.replaceWith(...c.childNodes));
+  const code = document.createElement("code");
+  code.appendChild(frag);
+  range.insertNode(code);
 }
 
 // ── Link insert / remove ──────────────────────────────────────────────────────
@@ -304,7 +308,7 @@ export function initFormattingToolbar() {
 
   // Inline code
   toolbarEl.appendChild(makeFmtBtn("<code style='font-size:0.78rem;background:rgba(255,255,255,0.15);padding:1px 4px;border-radius:3px;color:#f8f8f2'>&lt;/&gt;</code>", "인라인 코드", () => {
-    applyInlineCode();
+    toggleInlineCode();
   }));
 
   toolbarEl.appendChild(makeDivider());
