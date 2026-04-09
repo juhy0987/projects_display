@@ -259,6 +259,19 @@ function makeDivider() {
   return d;
 }
 
+// ── Active node tracking (prevents per-block selectionchange listeners) ────────
+
+let currentEditingNode = null;
+
+export function setEditingNode(node) {
+  currentEditingNode = node;
+}
+
+export function clearEditingNode() {
+  currentEditingNode = null;
+  hideFormattingToolbar();
+}
+
 export function initFormattingToolbar() {
   if (toolbarEl) return; // already initialised
 
@@ -338,6 +351,12 @@ export function initFormattingToolbar() {
   toolbarEl.appendChild(colorBtn);
 
   document.body.appendChild(toolbarEl);
+
+  // Single shared selectionchange listener — updates toolbar for active node only
+  document.addEventListener("selectionchange", () => {
+    if (!currentEditingNode) return;
+    showFormattingToolbar(currentEditingNode);
+  });
 
   // Close sub-panels when clicking outside the toolbar
   document.addEventListener("mousedown", (e) => {
