@@ -45,7 +45,9 @@ function sanitizeNode(node) {
 
     const tag = child.tagName.toLowerCase();
     if (!ALLOWED_TAGS.has(tag)) {
-      // Unwrap: keep children, discard wrapper element
+      // Sanitize descendants first before unwrapping, so disallowed nodes
+      // nested inside a disallowed wrapper cannot escape the allowlist.
+      sanitizeNode(child);
       child.replaceWith(...child.childNodes);
       continue;
     }
@@ -88,11 +90,18 @@ export function sanitizeHtml(html) {
 let toolbarEl = null;
 let colorPanelEl = null;
 let linkPanelEl = null;
-let activeTextNode = null;
 let savedRange = null;
+
+/** Returns true when el is inside the formatting toolbar (used to suppress text-block blur). */
+export function isInsideToolbar(el) {
+  return toolbarEl !== null && el instanceof Node && toolbarEl.contains(el);
+}
 
 function restoreSelection() {
   if (!savedRange) return;
+  // Re-focus the text block before restoring the selection range so that
+  // execCommand and subsequent toolbar interactions work correctly.
+  if (currentEditingNode) currentEditingNode.focus();
   const sel = window.getSelection();
   if (sel) {
     sel.removeAllRanges();
@@ -404,7 +413,6 @@ export function showFormattingToolbar(textNode) {
   const rect = range.getBoundingClientRect();
   if (rect.width === 0) { hideFormattingToolbar(); return; }
 
-  activeTextNode = textNode;
   toolbarEl.classList.add("is-visible");
 
   // Reflow needed to get toolbarEl dimensions
@@ -429,5 +437,4 @@ export function hideFormattingToolbar() {
   toolbarEl.classList.remove("is-visible");
   closeColorPanel();
   closeLinkPanel();
-  activeTextNode = null;
 }

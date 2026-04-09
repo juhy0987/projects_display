@@ -9,6 +9,7 @@ import {
   sanitizeHtml,
   setEditingNode,
   clearEditingNode,
+  isInsideToolbar,
 } from "./formattingToolbar.js";
 
 // Initialise singleton toolbar once
@@ -73,7 +74,9 @@ function createTextBlock(block) {
   });
 
   // ── Blur: save and deactivate ────────────────────────────────────────────
-  node.addEventListener('blur', () => {
+  node.addEventListener('blur', (e) => {
+    // Focus moved into the formatting toolbar (e.g. link input) — stay in editing mode
+    if (isInsideToolbar(e.relatedTarget)) return;
     if (node.contentEditable !== 'true') return;
     node.contentEditable = 'false';
     node.classList.remove('is-editing');
