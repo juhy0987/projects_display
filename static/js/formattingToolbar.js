@@ -118,9 +118,29 @@ function toggleInlineCode() {
   const startCode = getCodeAncestor(range.startContainer);
   const endCode = getCodeAncestor(range.endContainer);
 
-  // Entire selection is within the same <code> → unwrap it
   if (startCode && startCode === endCode) {
-    startCode.replaceWith(...startCode.childNodes);
+    // Entire selection is within the same <code>:
+    // Extract only the selected portion, split the <code> into before/after halves,
+    // and insert the plain text between them.
+    const selectedFrag = range.extractContents();
+
+    // Capture the "after" portion: from the collapsed range position to end of codeEl
+    const afterRange = document.createRange();
+    afterRange.selectNodeContents(startCode);
+    afterRange.setStart(range.startContainer, range.startOffset);
+    const afterFrag = afterRange.extractContents();
+
+    const afterCode = document.createElement("code");
+    afterCode.appendChild(afterFrag);
+
+    const parent = startCode.parentNode;
+    const nextSibling = startCode.nextSibling;
+    parent.insertBefore(selectedFrag, nextSibling);
+    parent.insertBefore(afterCode, nextSibling);
+
+    // Remove empty <code> remnants
+    if (!startCode.textContent) startCode.remove();
+    if (!afterCode.textContent) afterCode.remove();
     return;
   }
 
