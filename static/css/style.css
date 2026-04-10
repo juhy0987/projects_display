@@ -260,6 +260,21 @@ body.sidebar-collapsed .sidebar-tab-chevron {
   overflow: hidden;
 }
 
+.document-menu-rename {
+  width: 100%;
+  border: none;
+  background: transparent;
+  text-align: left;
+  padding: 0.55rem 0.8rem;
+  cursor: pointer;
+  color: var(--ink-main);
+  font-size: 0.88rem;
+}
+
+.document-menu-rename:hover {
+  background: var(--surface-hover, rgba(0,0,0,0.05));
+}
+
 .document-menu-delete {
   width: 100%;
   border: none;
@@ -377,6 +392,19 @@ body.sidebar-collapsed .sidebar-tab-chevron {
   margin: 0;
   font-family: "Fraunces", serif;
   font-size: clamp(1.35rem, 3vw, 2.2rem);
+  cursor: text;
+  border-radius: 4px;
+  outline: none;
+  transition: background 0.15s;
+}
+
+.block-page-header h1:hover:not([contenteditable="true"]) {
+  background: var(--surface-hover, rgba(0,0,0,0.04));
+}
+
+.block-page-header h1.is-editing {
+  background: var(--surface-hover, rgba(0,0,0,0.04));
+  caret-color: var(--ink-main, #1a1a1a);
 }
 
 .block-page-header p {

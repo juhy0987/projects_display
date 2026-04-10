@@ -5,6 +5,7 @@ import {
   fetchDocument,
   apiCreateDocument,
   apiDeleteDocument,
+  apiUpdateTitle,
   apiCreateBlock,
   apiMoveBlock,
 } from "./api.js";
@@ -18,6 +19,65 @@ async function initGallery() {
   const newDocBtn = document.getElementById('new-document-btn');
 
   let activeDocId = null;
+
+  // ── Header title inline editing ───────────────────────────────────────────
+  const pageTitle = document.getElementById('page-title');
+  let titleEscaped = false;
+  let titleOriginal = '';
+
+  pageTitle.addEventListener('click', () => {
+    if (pageTitle.contentEditable === 'true' || !activeDocId) return;
+    titleOriginal = pageTitle.textContent;
+    titleEscaped = false;
+    pageTitle.contentEditable = 'true';
+    pageTitle.classList.add('is-editing');
+    pageTitle.focus();
+    const sel = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(pageTitle);
+    range.collapse(false);
+    if (sel) { sel.removeAllRanges(); sel.addRange(range); }
+  });
+
+  pageTitle.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); pageTitle.blur(); }
+    if (e.key === 'Escape') {
+      titleEscaped = true;
+      pageTitle.textContent = titleOriginal;
+      pageTitle.contentEditable = 'false';
+      pageTitle.classList.remove('is-editing');
+    }
+  });
+
+  pageTitle.addEventListener('blur', () => {
+    if (pageTitle.contentEditable !== 'true') return;
+    pageTitle.contentEditable = 'false';
+    pageTitle.classList.remove('is-editing');
+    if (titleEscaped) { titleEscaped = false; return; }
+
+    const newTitle = pageTitle.textContent.trim() || '새 문서';
+    pageTitle.textContent = newTitle;
+
+    if (newTitle !== titleOriginal && activeDocId) {
+      const docId = activeDocId;
+      apiUpdateTitle(docId, newTitle)
+        .then(() => {
+          if (callbacks.onTitleChanged) callbacks.onTitleChanged(docId, newTitle);
+        })
+        .catch((err) => {
+          console.error(err);
+          pageTitle.textContent = titleOriginal;
+        });
+    }
+  });
+
+  /** Update the sidebar button text for a given document id. */
+  function updateSidebarTitle(docId, newTitle) {
+    const item = list.querySelector(`li[data-id="${docId}"]`);
+    if (!item) return;
+    const btn = item.querySelector(':scope > .document-row > .document-item');
+    if (btn) btn.textContent = newTitle;
+  }
 
   // ── Sidebar helpers ───────────────────────────────────────────────────────
   /**
@@ -76,6 +136,18 @@ async function initGallery() {
 
   callbacks.onPageBlockAdded = (childDoc) => {
     addChildToSidebar(childDoc);
+  };
+
+  callbacks.onTitleChanged = (documentId, newTitle) => {
+    updateSidebarTitle(documentId, newTitle);
+    // If the changed document is currently open, update the header
+    if (documentId === activeDocId) {
+      pageTitle.textContent = newTitle;
+    }
+    // Update any visible page blocks that reference this document
+    document.querySelectorAll(`.page-block-title[data-doc-id="${documentId}"]`).forEach((el) => {
+      el.textContent = newTitle;
+    });
   };
 
   // ── Document loader ───────────────────────────────────────────────────────
@@ -179,6 +251,9 @@ async function initGallery() {
         console.error('문서 삭제 실패:', err);
       }
     },
+    onRename(docId, newTitle) {
+      if (callbacks.onTitleChanged) callbacks.onTitleChanged(docId, newTitle);
+    },
   };
 
   // ── Sidebar ───────────────────────────────────────────────────────────────
@@ -222,7 +297,9 @@ async function initGallery() {
       document.getElementById('page-subtitle').textContent = '';
       root.innerHTML = '';
       activeDocId = newDoc.id;
-      enterInlineEdit(item, newDoc.id, newDoc.title, list, (docId) => loadDocument(docId));
+      enterInlineEdit(item, newDoc.id, newDoc.title, list, (docId) => loadDocument(docId), (docId, newTitle) => {
+        if (callbacks.onTitleChanged) callbacks.onTitleChanged(docId, newTitle);
+      });
     } catch (err) {
       console.error('문서 생성 실패:', err);
     }
