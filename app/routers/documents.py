@@ -12,14 +12,21 @@ from app.repositories.sqlite_blocks import SQLiteBlockRepository
 router = APIRouter(prefix="/api/documents", tags=["documents"])
 
 
+MAX_TITLE_LENGTH = 100
+
+
 class DocumentTitleUpdate(BaseModel):
   title: str
 
   @field_validator("title")
   @classmethod
-  def title_not_blank(cls, v: str) -> str:
+  def validate_title(cls, v: str) -> str:
     stripped = v.strip()
-    return stripped if stripped else "새 문서"
+    if not stripped:
+      return "새 문서"
+    if len(stripped) > MAX_TITLE_LENGTH:
+      raise ValueError(f"제목은 {MAX_TITLE_LENGTH}자를 초과할 수 없습니다.")
+    return stripped
 
 
 @router.get("")
