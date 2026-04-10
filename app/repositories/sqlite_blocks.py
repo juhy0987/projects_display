@@ -21,6 +21,9 @@ from app.models.blocks import (
 from app.models.orm import BlockRow, DocumentRow
 
 
+_CONTAINER_TYPES: frozenset[str] = frozenset({"container", "toggle", "quote", "callout"})
+
+
 class SQLiteBlockRepository:
   """SQLAlchemy-backed repository for notion-style block documents."""
 
@@ -248,7 +251,7 @@ class SQLiteBlockRepository:
         case "container":
           default_content = {"title": "", "layout": "vertical"}
         case "toggle":
-          default_content = {"title": "", "is_open": False}
+          default_content = {"title": "", "is_open": True}
         case "quote":
           default_content = {"text": ""}
         case "code":
@@ -279,12 +282,29 @@ class SQLiteBlockRepository:
       position=max_pos + 1,
       content_json=json.dumps(default_content, ensure_ascii=False),
     ))
+
+    # ── Container blocks: auto-create one child text block ────────────────────
+    child_text_row: dict[str, Any] | None = None
+    if block_type in _CONTAINER_TYPES:
+      child_id = str(uuid.uuid4())
+      self._session.add(BlockRow(
+        id=child_id,
+        document_id=document_id,
+        parent_block_id=block_id,
+        type="text",
+        position=1,
+        content_json=json.dumps({"text": ""}, ensure_ascii=False),
+      ))
+      child_text_row = {"id": child_id, "type": "text", "text": ""}
+
     self._session.commit()
 
     result: dict[str, Any] = {"id": block_id, "type": block_type, **default_content}
     if block_type == "page":
       result["title"] = child_doc["title"]
       result["child_document"] = child_doc
+    if child_text_row is not None:
+      result["children"] = [child_text_row]
     return result
 
   def delete_block(self, block_id: str) -> bool:
@@ -326,6 +346,17 @@ class SQLiteBlockRepository:
       .values(position=BlockRow.position - 1)
     )
     self._session.commit()
+
+    # ── Cascade: if parent container is now empty, delete it too ─────────────
+    if parent_block_id is not None:
+      parent_row = self._session.get(BlockRow, parent_block_id)
+      if parent_row is not None and parent_row.type in _CONTAINER_TYPES:
+        remaining = self._session.execute(
+          select(func.count()).where(BlockRow.parent_block_id == parent_block_id)
+        ).scalar_one()
+        if remaining == 0:
+          self.delete_block(parent_block_id)
+
     return True
 
   def _collect_subtree_ids(self, root_id: str) -> list[str]:
