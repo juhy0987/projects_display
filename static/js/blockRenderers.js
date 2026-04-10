@@ -346,6 +346,7 @@ function createToggleBlock(block) {
   let titleEscaped = false;
 
   titleEl.addEventListener('click', (e) => {
+    e.stopPropagation();
     if (e.target === arrowBtn) return;
     if (titleEl.contentEditable === 'true') return;
     originalHtml = titleEl.innerHTML;

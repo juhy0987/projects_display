@@ -587,10 +587,12 @@ body.sidebar-collapsed .sidebar-tab-chevron {
 
 .toggle-title {
   flex: 1;
+  margin: 0;
   font-weight: 500;
   color: var(--ink);
   line-height: 1.5;
   outline: none;
+  cursor: text;
 }
 
 .toggle-children {
