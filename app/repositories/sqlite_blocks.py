@@ -22,11 +22,31 @@ class SQLiteBlockRepository:
 
   # ── Documents ──────────────────────────────────────────────────────────────
 
-  def list_documents(self) -> list[dict[str, str]]:
+  def list_documents(self) -> list[dict]:
+    """Return all documents as a parent-child tree sorted by title.
+
+    Each root-level document has a ``children`` list; children are sorted
+    alphabetically and may themselves contain further children.
+    """
     rows = self._session.execute(
       select(DocumentRow).order_by(DocumentRow.title)
     ).scalars().all()
-    return [{"id": r.id, "title": r.title, "subtitle": r.subtitle} for r in rows]
+
+    all_docs: list[dict] = [
+      {"id": r.id, "title": r.title, "subtitle": r.subtitle, "parent_id": r.parent_id, "children": []}
+      for r in rows
+    ]
+    by_id = {d["id"]: d for d in all_docs}
+    roots: list[dict] = []
+
+    for doc in all_docs:
+      pid = doc["parent_id"]
+      if pid and pid in by_id:
+        by_id[pid]["children"].append(doc)
+      else:
+        roots.append(doc)
+
+    return roots
 
   def get_document(self, document_id: str) -> BlockDocument | None:
     doc_row = self._session.get(DocumentRow, document_id)
@@ -91,12 +111,37 @@ class SQLiteBlockRepository:
       blocks=build_nodes(None),
     )
 
-  def create_document(self) -> dict[str, str]:
+  def create_document(self) -> dict:
     doc_id = str(uuid.uuid4())
     title = "새 문서"
-    self._session.add(DocumentRow(id=doc_id, title=title, subtitle=""))
+    self._session.add(DocumentRow(id=doc_id, title=title, subtitle="", parent_id=None))
     self._session.commit()
-    return {"id": doc_id, "title": title, "subtitle": ""}
+    return {"id": doc_id, "title": title, "subtitle": "", "parent_id": None, "children": []}
+
+  def create_child_document(self, parent_id: str) -> dict | None:
+    """Create a new document as a direct child of *parent_id*.
+
+    Returns None if *parent_id* does not exist.
+    """
+    if self._session.get(DocumentRow, parent_id) is None:
+      return None
+    doc_id = str(uuid.uuid4())
+    title = "새 문서"
+    self._session.add(DocumentRow(id=doc_id, title=title, subtitle="", parent_id=parent_id))
+    self._session.commit()
+    return {"id": doc_id, "title": title, "subtitle": "", "parent_id": parent_id, "children": []}
+
+  def _is_descendant(self, ancestor_id: str, candidate_id: str) -> bool:
+    """Return True if *candidate_id* is *ancestor_id* or a descendant of it."""
+    current: str | None = candidate_id
+    while current is not None:
+      if current == ancestor_id:
+        return True
+      row = self._session.get(DocumentRow, current)
+      if row is None:
+        break
+      current = row.parent_id
+    return False
 
   def update_document_title(self, document_id: str, title: str) -> bool:
     doc_row = self._session.get(DocumentRow, document_id)
@@ -110,6 +155,12 @@ class SQLiteBlockRepository:
     doc_row = self._session.get(DocumentRow, document_id)
     if doc_row is None:
       return False
+    # Promote direct children to root so they are not orphaned
+    self._session.execute(
+      update(DocumentRow)
+      .where(DocumentRow.parent_id == document_id)
+      .values(parent_id=None)
+    )
     self._session.delete(doc_row)
     self._session.commit()
     return True
