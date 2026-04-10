@@ -174,7 +174,7 @@ async function initGallery() {
     const addBlock = async (type, parentBlockId = null) => {
       const newBlock = await apiCreateBlock(activeDocId, type, parentBlockId);
       const containerEl = parentBlockId
-        ? document.querySelector(`[data-block-id="${parentBlockId}"] .container-children`)
+        ? document.querySelector(`[data-block-id="${parentBlockId}"] [data-block-children]`)
         : root;
       if (containerEl) {
         const newWrapper = renderBlock(newBlock, parentBlockId);

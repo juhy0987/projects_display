@@ -12,7 +12,7 @@
 <template id="container-block-template">
   <section class="notion-block notion-container">
     <header class="container-title"></header>
-    <div class="container-children"></div>
+    <div class="container-children" data-block-children></div>
   </section>
 </template>
 
@@ -32,14 +32,14 @@
     <summary class="toggle-summary">
       <span class="toggle-title"></span>
     </summary>
-    <div class="toggle-children"></div>
+    <div class="toggle-children" data-block-children></div>
   </details>
 </template>
 
 <template id="quote-block-template">
   <blockquote class="notion-block notion-quote">
     <p class="quote-text"></p>
-    <div class="quote-children"></div>
+    <div class="quote-children" data-block-children></div>
   </blockquote>
 </template>
 
@@ -58,7 +58,7 @@
     <span class="callout-emoji"></span>
     <div class="callout-body">
       <p class="callout-text"></p>
-      <div class="callout-children"></div>
+      <div class="callout-children" data-block-children></div>
     </div>
   </div>
 </template>

@@ -126,7 +126,8 @@ function createTextBlock(block) {
     if (e.key === '/' && node.contentEditable === 'true' && !node.textContent.trim()) {
       e.preventDefault();
       node.blur();
-      openBlockPalette(node, null, null, callbacks.addBlock);
+      const slashParentId = node.closest('.block-wrapper')?.dataset.parentBlockId || null;
+      openBlockPalette(node, slashParentId, null, callbacks.addBlock);
       return;
     }
 
