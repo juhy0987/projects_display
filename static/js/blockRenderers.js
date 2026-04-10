@@ -306,6 +306,115 @@ function createContainerBlock(block) {
   return node;
 }
 
+function createToggleBlock(block) {
+  const template = document.getElementById('toggle-block-template');
+  const node = template.content.firstElementChild.cloneNode(true);
+  const titleEl = node.querySelector('.toggle-title');
+  const childrenRoot = node.querySelector('.toggle-children');
+
+  if (block.is_open) node.open = true;
+  titleEl.textContent = block.title || '';
+  enableContentEditable(titleEl, block.id, 'title', node);
+
+  // Persist open/closed state on toggle
+  node.addEventListener('toggle', () => {
+    apiPatchBlock(block.id, { is_open: node.open }).catch(console.error);
+  });
+
+  block.children.forEach((child) => {
+    childrenRoot.appendChild(renderBlock(child, block.id));
+  });
+
+  return node;
+}
+
+const CODE_LANGUAGES = [
+  'plain', 'javascript', 'typescript', 'python', 'bash', 'html', 'css',
+  'json', 'sql', 'java', 'go', 'rust', 'c', 'cpp',
+];
+
+function createCodeBlock(block) {
+  const template = document.getElementById('code-block-template');
+  const node = template.content.firstElementChild.cloneNode(true);
+  const select = node.querySelector('.code-language-select');
+  const codeEl = node.querySelector('.code-content');
+  const copyBtn = node.querySelector('.code-copy-btn');
+
+  CODE_LANGUAGES.forEach((lang) => {
+    const opt = document.createElement('option');
+    opt.value = lang;
+    opt.textContent = lang;
+    if (lang === (block.language || 'plain')) opt.selected = true;
+    select.appendChild(opt);
+  });
+
+  codeEl.textContent = block.code || '';
+
+  let originalCode = block.code || '';
+
+  codeEl.addEventListener('focus', () => { node.classList.add('is-editing'); });
+  codeEl.addEventListener('blur', () => {
+    node.classList.remove('is-editing');
+    const newCode = codeEl.textContent;
+    if (newCode !== originalCode) {
+      originalCode = newCode;
+      apiPatchBlock(block.id, { code: newCode }).catch(console.error);
+    }
+  });
+  codeEl.addEventListener('keydown', (e) => {
+    // Tab → insert two spaces instead of moving focus
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      document.execCommand('insertText', false, '  ');
+    }
+    // Escape → blur
+    if (e.key === 'Escape') codeEl.blur();
+  });
+
+  select.addEventListener('change', () => {
+    apiPatchBlock(block.id, { language: select.value }).catch(console.error);
+  });
+
+  copyBtn.addEventListener('click', () => {
+    navigator.clipboard.writeText(codeEl.textContent).then(() => {
+      copyBtn.textContent = '복사됨';
+      setTimeout(() => { copyBtn.textContent = '복사'; }, 1500);
+    }).catch(console.error);
+  });
+
+  return node;
+}
+
+function createQuoteBlock(block) {
+  const template = document.getElementById('quote-block-template');
+  const node = template.content.firstElementChild.cloneNode(true);
+  const textEl = node.querySelector('.quote-text');
+  const childrenRoot = node.querySelector('.quote-children');
+
+  textEl.textContent = block.text || '';
+  enableContentEditable(textEl, block.id, 'text', node);
+
+  block.children.forEach((child) => {
+    childrenRoot.appendChild(renderBlock(child, block.id));
+  });
+
+  return node;
+}
+
+function createCalloutBlock(block) {
+  const template = document.getElementById('callout-block-template');
+  const node = template.content.firstElementChild.cloneNode(true);
+  const emojiEl = node.querySelector('.callout-emoji');
+  const textEl = node.querySelector('.callout-text');
+
+  node.dataset.color = block.color || 'yellow';
+  emojiEl.textContent = block.emoji || '💡';
+  textEl.textContent = block.text || '';
+  enableContentEditable(textEl, block.id, 'text', node);
+
+  return node;
+}
+
 function createDividerBlock() {
   const template = document.getElementById('divider-block-template');
   return template.content.firstElementChild.cloneNode(true);
@@ -477,6 +586,18 @@ export function renderBlock(block, parentBlockId = null) {
     case 'container':
       blockEl = createContainerBlock(block);
       break;
+    case 'toggle':
+      blockEl = createToggleBlock(block);
+      break;
+    case 'quote':
+      blockEl = createQuoteBlock(block);
+      break;
+    case 'code':
+      blockEl = createCodeBlock(block);
+      break;
+    case 'callout':
+      blockEl = createCalloutBlock(block);
+      break;
     case 'divider':
       blockEl = createDividerBlock();
       break;
@@ -504,7 +625,7 @@ export function focusBlock(wrapperEl) {
   if (!blockEl) return;
   const target = blockEl.classList.contains('notion-text')
     ? blockEl
-    : (blockEl.querySelector('.notion-caption, .container-title') ?? blockEl);
+    : (blockEl.querySelector('.notion-caption, .container-title, .toggle-title, .quote-text, .code-content, .callout-text') ?? blockEl);
   target.click();
 }
 
