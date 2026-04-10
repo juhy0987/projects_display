@@ -126,13 +126,90 @@ class TestIsDescendant:
     assert repo._is_descendant(child["id"], parent["id"]) is False
 
 
+# ── Page block → child document (issue #28 core feature) ─────────────────────
+
+class TestPageBlockCreatesChildDocument:
+  def test_page_block_auto_creates_child_document(self, repo):
+    parent_doc = repo.create_document()
+    result = repo.create_block(parent_doc["id"], "page")
+
+    assert result is not None
+    assert result["type"] == "page"
+    assert "document_id" in result
+    assert "child_document" in result
+
+  def test_child_document_has_correct_parent_id(self, repo):
+    parent_doc = repo.create_document()
+    result = repo.create_block(parent_doc["id"], "page")
+
+    child = result["child_document"]
+    assert child["parent_id"] == parent_doc["id"]
+
+  def test_child_document_appears_in_sidebar_tree(self, repo):
+    parent_doc = repo.create_document()
+    result = repo.create_block(parent_doc["id"], "page")
+    child_id = result["document_id"]
+
+    tree = repo.list_documents()
+    parent_node = next(d for d in tree if d["id"] == parent_doc["id"])
+    child_ids = {c["id"] for c in parent_node["children"]}
+    assert child_id in child_ids
+
+  def test_page_block_contains_child_doc_id(self, repo):
+    parent_doc = repo.create_document()
+    result = repo.create_block(parent_doc["id"], "page")
+
+    assert result["document_id"] == result["child_document"]["id"]
+
+  def test_page_block_returns_404_for_missing_document(self, repo):
+    result = repo.create_block("nonexistent-id", "page")
+    assert result is None
+
+
+class TestPageBlockDeletePromotesChildDocument:
+  def test_deleting_page_block_promotes_child_to_root(self, repo):
+    parent_doc = repo.create_document()
+    block = repo.create_block(parent_doc["id"], "page")
+    child_id = block["document_id"]
+    block_id = block["id"]
+
+    # Child should currently be under parent
+    tree = repo.list_documents()
+    parent_node = next(d for d in tree if d["id"] == parent_doc["id"])
+    assert any(c["id"] == child_id for c in parent_node["children"])
+
+    # Delete the page block
+    repo.delete_block(block_id)
+
+    # Child should now be at root
+    tree = repo.list_documents()
+    root_ids = {d["id"] for d in tree}
+    assert child_id in root_ids
+
+    parent_node = next(d for d in tree if d["id"] == parent_doc["id"])
+    assert not any(c["id"] == child_id for c in parent_node["children"])
+
+  def test_child_document_content_preserved_after_block_delete(self, repo):
+    parent_doc = repo.create_document()
+    block = repo.create_block(parent_doc["id"], "page")
+    child_id = block["document_id"]
+
+    repo.delete_block(block["id"])
+
+    # Child document still exists
+    child = repo.get_document(child_id)
+    assert child is not None
+    assert child.id == child_id
+
+
 # ── API-level tests ───────────────────────────────────────────────────────────
 
 class TestDocumentListApi:
   def test_returns_tree_structure(self, client):
     r1 = client.post("/api/documents").json()
     r2 = client.post("/api/documents").json()
-    client.post(f"/api/documents/{r1['id']}/children")
+    # Create a child via page block
+    client.post(f"/api/documents/{r1['id']}/blocks", json={"type": "page"})
 
     docs = client.get("/api/documents").json()
     root_ids = {d["id"] for d in docs}
@@ -146,35 +223,50 @@ class TestDocumentListApi:
     assert "children" in docs[0]
 
 
-class TestCreateChildDocumentApi:
-  def test_success_returns_201(self, client):
-    parent = client.post("/api/documents").json()
-    res = client.post(f"/api/documents/{parent['id']}/children")
+class TestPageBlockApi:
+  def test_create_page_block_returns_201(self, client):
+    doc = client.post("/api/documents").json()
+    res = client.post(f"/api/documents/{doc['id']}/blocks", json={"type": "page"})
     assert res.status_code == 201
 
-  def test_response_contains_parent_id(self, client):
-    parent = client.post("/api/documents").json()
-    child = client.post(f"/api/documents/{parent['id']}/children").json()
-    assert child["parent_id"] == parent["id"]
+  def test_response_contains_child_document(self, client):
+    doc = client.post("/api/documents").json()
+    block = client.post(f"/api/documents/{doc['id']}/blocks", json={"type": "page"}).json()
+    assert "child_document" in block
+    assert block["child_document"]["parent_id"] == doc["id"]
 
-  def test_child_has_children_field(self, client):
-    parent = client.post("/api/documents").json()
-    child = client.post(f"/api/documents/{parent['id']}/children").json()
-    assert "children" in child
+  def test_child_document_visible_in_tree(self, client):
+    doc = client.post("/api/documents").json()
+    block = client.post(f"/api/documents/{doc['id']}/blocks", json={"type": "page"}).json()
+    child_id = block["document_id"]
 
-  def test_returns_404_for_missing_parent(self, client):
-    res = client.post("/api/documents/nonexistent/children")
-    assert res.status_code == 404
+    docs = client.get("/api/documents").json()
+    parent_node = next(d for d in docs if d["id"] == doc["id"])
+    child_ids = {c["id"] for c in parent_node["children"]}
+    assert child_id in child_ids
+
+  def test_deleting_page_block_promotes_child_to_root(self, client):
+    doc = client.post("/api/documents").json()
+    block = client.post(f"/api/documents/{doc['id']}/blocks", json={"type": "page"}).json()
+    child_id = block["document_id"]
+    block_id = block["id"]
+
+    client.delete(f"/api/blocks/{block_id}")
+
+    docs = client.get("/api/documents").json()
+    root_ids = {d["id"] for d in docs}
+    assert child_id in root_ids
 
 
 class TestDeleteDocumentApi:
   def test_children_become_roots_after_delete(self, client):
     parent = client.post("/api/documents").json()
-    child = client.post(f"/api/documents/{parent['id']}/children").json()
+    block = client.post(f"/api/documents/{parent['id']}/blocks", json={"type": "page"}).json()
+    child_id = block["document_id"]
 
     client.delete(f"/api/documents/{parent['id']}")
 
     docs = client.get("/api/documents").json()
     root_ids = {d["id"] for d in docs}
     assert parent["id"] not in root_ids
-    assert child["id"] in root_ids
+    assert child_id in root_ids
