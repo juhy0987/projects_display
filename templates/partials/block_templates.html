@@ -28,12 +28,13 @@
 </template>
 
 <template id="toggle-block-template">
-  <details class="notion-block notion-toggle">
-    <summary class="toggle-summary">
+  <div class="notion-block notion-toggle">
+    <div class="toggle-header">
+      <button type="button" class="toggle-arrow-btn" aria-label="토글 열기/닫기" aria-expanded="false">▶</button>
       <span class="toggle-title"></span>
-    </summary>
-    <div class="toggle-children" data-block-children></div>
-  </details>
+    </div>
+    <div class="toggle-children" data-block-children hidden></div>
+  </div>
 </template>
 
 <template id="quote-block-template">

@@ -311,67 +311,31 @@ function createContainerBlock(block) {
 function createToggleBlock(block) {
   const template = document.getElementById('toggle-block-template');
   const node = template.content.firstElementChild.cloneNode(true);
-  const summaryEl = node.querySelector('.toggle-summary');
+  const arrowBtn = node.querySelector('.toggle-arrow-btn');
   const titleEl = node.querySelector('.toggle-title');
   const childrenRoot = node.querySelector('.toggle-children');
 
-  if (block.is_open) node.open = true;
+  let isOpen = !!block.is_open;
+
+  function applyOpen(open) {
+    isOpen = open;
+    childrenRoot.hidden = !open;
+    arrowBtn.setAttribute('aria-expanded', String(open));
+    arrowBtn.classList.toggle('is-open', open);
+  }
+
+  applyOpen(isOpen);
   titleEl.textContent = block.title || '';
 
-  // ── Title editing ────────────────────────────────────────────────────────
-  // Clicking the title text enters edit mode; clicking anywhere else on the
-  // summary toggles open/closed. Without this split, <summary>'s default
-  // click handling would steal the event before the title could become editable.
-  let originalTitle = block.title || '';
-  let titleEscaped = false;
-
-  titleEl.addEventListener('click', (e) => {
-    if (titleEl.contentEditable === 'true') return;
-    e.preventDefault(); // prevent <details> toggle while editing
+  // ── Arrow button: only way to open/close ────────────────────────────────
+  arrowBtn.addEventListener('click', (e) => {
     e.stopPropagation();
-    originalTitle = titleEl.textContent;
-    titleEscaped = false;
-    titleEl.contentEditable = 'true';
-    titleEl.focus();
-    const sel = window.getSelection();
-    const range = document.createRange();
-    range.selectNodeContents(titleEl);
-    range.collapse(false);
-    if (sel) { sel.removeAllRanges(); sel.addRange(range); }
+    applyOpen(!isOpen);
+    apiPatchBlock(block.id, { is_open: isOpen }).catch(console.error);
   });
 
-  titleEl.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); titleEl.blur(); }
-    if (e.key === 'Escape') {
-      titleEscaped = true;
-      titleEl.textContent = originalTitle;
-      titleEl.contentEditable = 'false';
-    }
-  });
-
-  titleEl.addEventListener('blur', () => {
-    if (titleEl.contentEditable !== 'true') return;
-    titleEl.contentEditable = 'false';
-    if (titleEscaped) { titleEscaped = false; return; }
-    const newTitle = titleEl.textContent.trim();
-    if (newTitle !== originalTitle) {
-      originalTitle = newTitle;
-      apiPatchBlock(block.id, { title: newTitle }).catch(console.error);
-    }
-  });
-
-  // ── Open/close toggle (summary click outside title) ───────────────────────
-  summaryEl.addEventListener('click', (e) => {
-    if (titleEl.contentEditable === 'true') {
-      e.preventDefault(); // don't close while typing
-      return;
-    }
-    if (titleEl.contains(e.target)) return; // title click handled above
-    // Let default <details> toggle happen, then persist
-    setTimeout(() => {
-      apiPatchBlock(block.id, { is_open: node.open }).catch(console.error);
-    }, 0);
-  });
+  // ── Title editing ────────────────────────────────────────────────────────
+  enableContentEditable(titleEl, block.id, 'title', node);
 
   block.children.forEach((child) => {
     childrenRoot.appendChild(renderBlock(child, block.id));
