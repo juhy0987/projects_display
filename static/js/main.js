@@ -64,7 +64,10 @@ async function initGallery() {
         .then(() => {
           if (callbacks.onTitleChanged) callbacks.onTitleChanged(docId, newTitle);
         })
-        .catch(console.error);
+        .catch((err) => {
+          console.error(err);
+          pageTitle.textContent = titleOriginal;
+        });
     }
   });
 

@@ -35,7 +35,7 @@ export function enterInlineEdit(listItem, docId, initialTitle, list, onSelect, o
   let exited = false;
 
   function restoreButton(title) {
-    if (exited) return;
+    if (exited) return null;
     exited = true;
 
     const btn = document.createElement('button');
@@ -49,29 +49,32 @@ export function enterInlineEdit(listItem, docId, initialTitle, list, onSelect, o
     });
     input.replaceWith(btn);
     if (menuBtn) menuBtn.hidden = false;
+    return btn;
   }
 
-  function commitTitle(newTitle) {
+  function saveTitle(newTitle) {
+    const btn = restoreButton(newTitle);
+    if (newTitle === initialTitle) return;
     apiUpdateTitle(docId, newTitle)
       .then(() => { if (onTitleSaved) onTitleSaved(docId, newTitle); })
-      .catch(console.error);
+      .catch((err) => {
+        console.error(err);
+        if (btn) btn.textContent = initialTitle;
+      });
   }
 
   input.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
       e.preventDefault();
-      const newTitle = input.value.trim() || '새 문서';
-      commitTitle(newTitle);
-      restoreButton(newTitle);
+      saveTitle(input.value.trim() || '새 문서');
     } else if (e.key === 'Escape') {
       restoreButton(initialTitle);
     }
   });
 
   input.addEventListener('blur', () => {
-    const newTitle = input.value.trim() || '새 문서';
-    if (!exited) commitTitle(newTitle);
-    restoreButton(newTitle);
+    if (exited) return;
+    saveTitle(input.value.trim() || '새 문서');
   });
 }
 
