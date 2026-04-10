@@ -43,6 +43,7 @@ class ToggleBlock(BlockBase):
 
   type: Literal["toggle"]
   title: str = ""
+  formatted_title: str | None = None  # HTML string with inline formatting
   is_open: bool = False
   children: list["Block"] = Field(default_factory=list)
 

@@ -21,6 +21,7 @@ class BlockPatch(BaseModel):
   caption: str | None = None
   # container / toggle
   title: str | None = None
+  formatted_title: str | None = None  # HTML string with inline formatting for toggle title
   # toggle
   is_open: bool | None = None
   # code
