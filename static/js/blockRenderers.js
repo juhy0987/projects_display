@@ -27,6 +27,7 @@ export const callbacks = {
   reloadDocument: null,     // () => void
   onPageBlockAdded: null,   // (childDoc) => void — update sidebar after page block creation
   reloadSidebar: null,      // () => Promise<void> — full sidebar refresh
+  onTitleChanged: null,     // (documentId, newTitle) => void — propagate title change to page blocks
 };
 
 // ── Individual block creators ─────────────────────────────────────────────────
@@ -313,7 +314,9 @@ function createDividerBlock() {
 function createPageBlock(block) {
   const template = document.getElementById('page-block-template');
   const node = template.content.firstElementChild.cloneNode(true);
-  node.querySelector('.page-block-title').textContent = block.title || block.document_id;
+  const titleEl = node.querySelector('.page-block-title');
+  titleEl.textContent = block.title || block.document_id;
+  titleEl.dataset.docId = block.document_id;
   node.addEventListener('click', () => {
     if (callbacks.navigateTo) callbacks.navigateTo(block.document_id);
   });
