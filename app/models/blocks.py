@@ -38,6 +38,41 @@ class ContainerBlock(BlockBase):
   children: list["Block"] = Field(default_factory=list)
 
 
+class ToggleBlock(BlockBase):
+  """Collapsible block with a title and nested child blocks."""
+
+  type: Literal["toggle"]
+  title: str = ""
+  is_open: bool = False
+  children: list["Block"] = Field(default_factory=list)
+
+
+class QuoteBlock(BlockBase):
+  """Blockquote with optional nested child blocks."""
+
+  type: Literal["quote"]
+  text: str = ""
+  children: list["Block"] = Field(default_factory=list)
+
+
+class CodeBlock(BlockBase):
+  """Code block with language selection and a copy action."""
+
+  type: Literal["code"]
+  code: str = ""
+  language: str = "plain"
+
+
+class CalloutBlock(BlockBase):
+  """Highlighted callout box with an emoji icon and background colour."""
+
+  type: Literal["callout"]
+  text: str = ""
+  emoji: str = "💡"
+  color: Literal["yellow", "blue", "green", "red", "gray"] = "yellow"
+  children: list["Block"] = Field(default_factory=list)
+
+
 class DividerBlock(BlockBase):
   """Horizontal divider block."""
 
@@ -53,7 +88,7 @@ class PageBlock(BlockBase):
 
 
 Block = Annotated[
-  TextBlock | ImageBlock | ContainerBlock | DividerBlock | PageBlock,
+  TextBlock | ImageBlock | ContainerBlock | ToggleBlock | QuoteBlock | CodeBlock | CalloutBlock | DividerBlock | PageBlock,
   Field(discriminator="type"),
 ]
 
