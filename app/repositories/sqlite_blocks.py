@@ -125,16 +125,33 @@ class SQLiteBlockRepository:
     """
     if self._session.get(DocumentRow, parent_id) is None:
       return None
+    data = self._build_child_document_row(parent_id)
+    self._session.commit()
+    return data
+
+  def _build_child_document_row(self, parent_id: str) -> dict:
+    """Add a child DocumentRow to the session without committing.
+
+    Callers are responsible for the commit so that the operation can be
+    composed into a larger atomic transaction.
+    """
     doc_id = str(uuid.uuid4())
     title = "새 문서"
     self._session.add(DocumentRow(id=doc_id, title=title, subtitle="", parent_id=parent_id))
-    self._session.commit()
     return {"id": doc_id, "title": title, "subtitle": "", "parent_id": parent_id, "children": []}
 
   def _is_descendant(self, ancestor_id: str, candidate_id: str) -> bool:
-    """Return True if *candidate_id* is *ancestor_id* or a descendant of it."""
+    """Return True if *candidate_id* is *ancestor_id* or a descendant of it.
+
+    Guards against pre-existing cycles in the parent_id chain via a visited set
+    so the loop always terminates.
+    """
+    visited: set[str] = set()
     current: str | None = candidate_id
     while current is not None:
+      if current in visited:
+        break  # cycle detected — stop traversal
+      visited.add(current)
       if current == ancestor_id:
         return True
       row = self._session.get(DocumentRow, current)
@@ -201,11 +218,11 @@ class SQLiteBlockRepository:
       if parent_exists is None:
         return None
 
-    # ── Page block: auto-create a child document ──────────────────────────────
+    # ── Page block: auto-create a child document (single transaction) ────────
     if block_type == "page":
-      child_doc = self.create_child_document(document_id)
-      if child_doc is None:
-        return None
+      # Use _build_child_document_row (no commit) so both the new document and
+      # the page block are committed together below, keeping the DB consistent.
+      child_doc = self._build_child_document_row(document_id)
       default_content: dict[str, Any] = {"document_id": child_doc["id"]}
     else:
       match block_type:

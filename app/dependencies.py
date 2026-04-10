@@ -10,6 +10,7 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
 
 from sqlalchemy import text
+from sqlalchemy.exc import OperationalError
 
 from app.models.orm import Base
 
@@ -23,8 +24,11 @@ def _migrate(engine: Engine) -> None:
     try:
       conn.execute(text("ALTER TABLE documents ADD COLUMN parent_id TEXT"))
       conn.commit()
-    except Exception:
-      pass  # column already exists
+    except OperationalError as e:
+      # SQLite raises OperationalError("duplicate column name") when the column
+      # already exists — that is the only expected error here.
+      if "duplicate column name" not in str(e).lower():
+        raise
 
 
 @functools.cache
