@@ -104,6 +104,15 @@ class SQLiteBlockRepository:
         if item["type"] in _CHILD_BEARING_TYPES:
           model_cls = {"toggle": ToggleBlock, "quote": QuoteBlock, "callout": CalloutBlock}[item["type"]]
           nodes.append(model_cls.model_validate({**item, "children": build_nodes(item["id"])}))
+        elif item["type"] == "container":
+          # 레거시 container 블록 역호환 — toggle로 매핑하여 children 유지
+          nodes.append(ToggleBlock.model_validate({
+            **item,
+            "type": "toggle",
+            "text": item.get("title") or item.get("text") or "",
+            "is_open": True,
+            "children": build_nodes(item["id"]),
+          }))
         elif item["type"] == "heading":
           # heading은 TextBlock으로 통합 — 기존 DB 데이터 하위 호환
           nodes.append(self._block_adapter.validate_python({**item, "type": "text"}))
