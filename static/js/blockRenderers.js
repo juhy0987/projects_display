@@ -385,6 +385,41 @@ const CODE_LANGUAGES = [
   'json', 'sql', 'java', 'go', 'rust', 'c', 'cpp',
 ];
 
+// ── Caret offset helpers for contenteditable (plain-text character index) ────
+
+function getCaretOffset(el) {
+  const sel = window.getSelection();
+  if (!sel || !sel.rangeCount) return 0;
+  const range = sel.getRangeAt(0).cloneRange();
+  range.selectNodeContents(el);
+  range.setEnd(sel.getRangeAt(0).endContainer, sel.getRangeAt(0).endOffset);
+  return range.toString().length;
+}
+
+function setCaretOffset(el, offset) {
+  const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+  let remaining = offset;
+  let node;
+  while ((node = walker.nextNode())) {
+    if (remaining <= node.textContent.length) {
+      const range = document.createRange();
+      range.setStart(node, remaining);
+      range.collapse(true);
+      const sel = window.getSelection();
+      sel?.removeAllRanges();
+      sel?.addRange(range);
+      return;
+    }
+    remaining -= node.textContent.length;
+  }
+  // Fallback: place cursor at end
+  const range = document.createRange();
+  range.selectNodeContents(el);
+  range.collapse(false);
+  window.getSelection()?.removeAllRanges();
+  window.getSelection()?.addRange(range);
+}
+
 function createCodeBlock(block) {
   const template = document.getElementById('code-block-template');
   const node = template.content.firstElementChild.cloneNode(true);
@@ -392,43 +427,87 @@ function createCodeBlock(block) {
   const codeEl = node.querySelector('.code-content');
   const copyBtn = node.querySelector('.code-copy-btn');
 
+  let currentLanguage = block.language || 'plain';
+  let plainCode = block.code || '';
+  let originalCode = plainCode;
+
   CODE_LANGUAGES.forEach((lang) => {
     const opt = document.createElement('option');
     opt.value = lang;
     opt.textContent = lang;
-    if (lang === (block.language || 'plain')) opt.selected = true;
+    if (lang === currentLanguage) opt.selected = true;
     select.appendChild(opt);
   });
 
-  codeEl.textContent = block.code || '';
+  // ── Syntax highlighting ──────────────────────────────────────────────────
+  function applyHighlight(code) {
+    if (!window.hljs || currentLanguage === 'plain') {
+      codeEl.textContent = code;
+      return;
+    }
+    try {
+      const result = window.hljs.highlight(code, {
+        language: currentLanguage,
+        ignoreIllegals: true,
+      });
+      codeEl.innerHTML = result.value;
+    } catch {
+      codeEl.textContent = code;
+    }
+  }
 
-  let originalCode = block.code || '';
+  applyHighlight(plainCode);
 
-  codeEl.addEventListener('focus', () => { node.classList.add('is-editing'); });
+  // ── Click → activate editing ─────────────────────────────────────────────
+  codeEl.addEventListener('click', () => {
+    if (codeEl.contentEditable === 'true') return;
+    codeEl.contentEditable = 'true';
+    node.classList.add('is-editing');
+    codeEl.focus();
+    // Place cursor at end
+    const range = document.createRange();
+    range.selectNodeContents(codeEl);
+    range.collapse(false);
+    window.getSelection()?.removeAllRanges();
+    window.getSelection()?.addRange(range);
+  });
+
+  // ── Input → live highlight with cursor preservation ──────────────────────
+  codeEl.addEventListener('input', () => {
+    const offset = getCaretOffset(codeEl);
+    plainCode = codeEl.textContent;
+    applyHighlight(plainCode);
+    setCaretOffset(codeEl, offset);
+  });
+
+  // ── Blur → save ──────────────────────────────────────────────────────────
   codeEl.addEventListener('blur', () => {
+    if (codeEl.contentEditable !== 'true') return;
+    codeEl.contentEditable = 'false';
     node.classList.remove('is-editing');
-    const newCode = codeEl.textContent;
-    if (newCode !== originalCode) {
-      originalCode = newCode;
-      apiPatchBlock(block.id, { code: newCode }).catch(console.error);
+    if (plainCode !== originalCode) {
+      originalCode = plainCode;
+      apiPatchBlock(block.id, { code: plainCode }).catch(console.error);
     }
   });
+
   codeEl.addEventListener('keydown', (e) => {
-    // Tab → insert two spaces instead of moving focus
     if (e.key === 'Tab') {
       e.preventDefault();
       document.execCommand('insertText', false, '  ');
     }
-    // Escape → blur
     if (e.key === 'Escape') codeEl.blur();
   });
 
+  // ── Language change → re-highlight ──────────────────────────────────────
   select.addEventListener('change', () => {
-    apiPatchBlock(block.id, { language: select.value }).catch(console.error);
+    currentLanguage = select.value;
+    apiPatchBlock(block.id, { language: currentLanguage }).catch(console.error);
+    applyHighlight(plainCode);
   });
 
   copyBtn.addEventListener('click', () => {
-    navigator.clipboard.writeText(codeEl.textContent).then(() => {
+    navigator.clipboard.writeText(plainCode).then(() => {
       copyBtn.textContent = '복사됨';
       setTimeout(() => { copyBtn.textContent = '복사'; }, 1500);
     }).catch(console.error);

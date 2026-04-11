@@ -643,12 +643,19 @@ body.sidebar-collapsed .sidebar-tab-chevron {
   transition: background 0.1s;
 }
 
-.code-copy-btn:hover { background: rgba(0, 0, 0, 0.05); }
 
 .code-body {
   margin: 0;
-  padding: 0.75rem 1rem;
+  padding: 0;
   overflow-x: auto;
+  background: #282c34; /* atom-one-dark background */
+  border-radius: 0 0 6px 6px;
+}
+
+/* Override hljs default padding so our pre controls it */
+.code-body .hljs {
+  background: transparent;
+  padding: 0.75rem 1rem;
 }
 
 .code-content {
@@ -659,6 +666,28 @@ body.sidebar-collapsed .sidebar-tab-chevron {
   white-space: pre;
   outline: none;
   min-height: 1.4em;
+  padding: 0.75rem 1rem;
+  color: #abb2bf; /* atom-one-dark default text */
+  cursor: text;
+}
+
+.code-content[contenteditable="true"] {
+  caret-color: #abb2bf;
+}
+
+.notion-code .code-header {
+  background: #21252b; /* slightly darker header */
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.code-language-select,
+.code-copy-btn {
+  color: #9da5b4;
+}
+
+.code-copy-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #abb2bf;
 }
 
 /* ── Callout block ───────────────────────────────────────────────────────── */
