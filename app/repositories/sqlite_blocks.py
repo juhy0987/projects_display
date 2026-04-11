@@ -389,7 +389,7 @@ class SQLiteBlockRepository:
       case "container":
         default_content = {"title": "", "layout": "vertical"}
       case "toggle":
-        default_content = {"title": "", "is_open": False}
+        default_content = {"title": "", "is_open": True}
       case "quote":
         default_content = {"text": ""}
       case "code":
@@ -405,6 +405,8 @@ class SQLiteBlockRepository:
     if block_row is None:
       return False
 
+    document_id = block_row.document_id
+
     # Delete all descendants (covers container children)
     all_ids = self._collect_subtree_ids(block_id)
     descendant_ids = [i for i in all_ids if i != block_id]
@@ -413,6 +415,19 @@ class SQLiteBlockRepository:
 
     block_row.type = new_type
     block_row.content_json = json.dumps(default_content, ensure_ascii=False)
+
+    # Container types: auto-create one child text block
+    if new_type in _CONTAINER_TYPES:
+      child_id = str(uuid.uuid4())
+      self._session.add(BlockRow(
+        id=child_id,
+        document_id=document_id,
+        parent_block_id=block_id,
+        type="text",
+        position=1,
+        content_json=json.dumps({"text": ""}, ensure_ascii=False),
+      ))
+
     self._session.commit()
     return True
 
