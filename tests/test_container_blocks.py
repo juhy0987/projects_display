@@ -1,7 +1,8 @@
-"""Tests for container-type block interface extension (issue #27).
+"""Tests for child-bearing block types (issue #27).
 
 Covers toggle, quote, code, callout block creation, update, type change,
 child nesting, and delete/subtree logic via both repository and API layers.
+ContainerBlockBase is the internal base — not a user-visible block type.
 """
 from __future__ import annotations
 
@@ -10,7 +11,7 @@ import pytest
 
 # ── Repository-level tests ────────────────────────────────────────────────────
 
-class TestCreateContainerBlocks:
+class TestCreateBlocks:
   """create_block returns correct defaults for each new type."""
 
   @pytest.mark.parametrize("block_type,expected_keys", [
@@ -33,10 +34,10 @@ class TestCreateContainerBlocks:
     assert block["text"] == ""
     assert block["is_open"] is True  # default open so user can type immediately
 
-  def test_container_types_include_one_child_on_create(self, repo):
-    """All container-type blocks are created with exactly one auto text child."""
+  def test_child_bearing_types_include_one_child_on_create(self, repo):
+    """toggle/quote/callout are created with exactly one auto text child."""
     doc = repo.create_document()
-    for block_type in ("container", "toggle", "quote", "callout"):
+    for block_type in ("toggle", "quote", "callout"):
       block = repo.create_block(doc["id"], block_type)
       assert "children" in block, f"{block_type} missing children in response"
       assert len(block["children"]) == 1
@@ -55,7 +56,7 @@ class TestCreateContainerBlocks:
     assert block["color"] == "yellow"
 
 
-class TestUpdateContainerBlocks:
+class TestUpdateBlocks:
   """update_block persists type-specific fields correctly."""
 
   def test_update_toggle_text_and_open(self, repo):
@@ -170,7 +171,7 @@ class TestChangeBlockType:
     assert code.language == "plain"
 
 
-class TestDeleteContainerBlocks:
+class TestDeleteBlocks:
   """delete_block removes the block and all its descendants."""
 
   def test_delete_toggle_removes_children(self, repo):
@@ -184,8 +185,8 @@ class TestDeleteContainerBlocks:
     fetched = repo.get_document(doc["id"])
     assert len(fetched.blocks) == 0
 
-  def test_deleting_last_child_cascades_container_delete(self, repo):
-    """When the last child of a container is deleted, the container is also deleted."""
+  def test_deleting_last_child_cascades_parent_delete(self, repo):
+    """When the last child of a child-bearing block is deleted, the parent is also deleted."""
     doc = repo.create_document()
     parent = repo.create_block(doc["id"], "toggle")
     # Only the 1 auto-created child exists
@@ -194,7 +195,7 @@ class TestDeleteContainerBlocks:
     repo.delete_block(auto_child_id)
 
     fetched = repo.get_document(doc["id"])
-    assert len(fetched.blocks) == 0  # container cascaded away
+    assert len(fetched.blocks) == 0  # toggle cascaded away
 
   def test_cascade_stops_when_siblings_remain(self, repo):
     """Container is kept alive as long as at least one child remains."""
@@ -210,17 +211,15 @@ class TestDeleteContainerBlocks:
     assert fetched.blocks[0].type == "toggle"
     assert len(fetched.blocks[0].children) == 1
 
-  def test_cascade_delete_propagates_through_nested_containers(self, repo):
-    """Cascade deletion propagates upward through nested containers."""
+  def test_cascade_delete_propagates_through_nested_blocks(self, repo):
+    """Cascade deletion propagates upward through nested child-bearing blocks."""
     doc = repo.create_document()
     outer = repo.create_block(doc["id"], "toggle")
     outer_auto_child_id = outer["children"][0]["id"]
 
-    # Replace the outer's auto-child with an inner container
+    # Delete outer's auto-child → outer cascades too (no children left).
     repo.delete_block(outer_auto_child_id)
-    # Outer is now empty and was cascade-deleted. Verify and recreate scenario:
-    # Actually this would cascade-delete outer too. Let's test differently:
-    # Create outer, add an inner container as explicit child, then outer auto child still exists.
+    # Recreate the scenario with an inner child-bearing block:
     doc2 = repo.create_document()
     outer2 = repo.create_block(doc2["id"], "toggle")
     inner = repo.create_block(doc2["id"], "quote", parent_block_id=outer2["id"])
@@ -247,7 +246,7 @@ class TestDeleteContainerBlocks:
 
 # ── API-level tests ───────────────────────────────────────────────────────────
 
-class TestContainerBlocksAPI:
+class TestBlocksAPI:
   """HTTP API smoke tests for new block types."""
 
   def _create_doc_and_block(self, client, block_type):

@@ -19,8 +19,6 @@ class BlockPatch(BaseModel):
   # image
   url: str | None = None
   caption: str | None = None
-  # container
-  title: str | None = None
   # toggle
   is_open: bool | None = None
   # code
@@ -36,7 +34,7 @@ class BlockPositionPatch(BaseModel):
 
 
 class BlockTypeChange(BaseModel):
-  type: Literal["text", "image", "container", "toggle", "quote", "code", "callout", "divider"]
+  type: Literal["text", "image", "toggle", "quote", "code", "callout", "divider"]
 
 
 @router.patch("/{block_id}")

@@ -452,31 +452,6 @@ body.sidebar-collapsed .sidebar-tab-chevron {
   padding: 0.66rem 0.74rem;
 }
 
-.notion-container {
-  border: none;
-  border-left: 2px solid var(--line);
-  border-radius: 0;
-  background: transparent;
-  padding: 0.4rem 0 0.4rem 1rem;
-}
-
-.container-title {
-  margin: 0 0 0.7rem;
-  font-size: 0.95rem;
-  letter-spacing: 0.02em;
-  color: #745f3c;
-  font-weight: 700;
-}
-
-.container-children {
-  display: grid;
-  gap: 0.34rem;
-  padding-left: 48px;
-}
-
-.container-children.is-grid {
-  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-}
 
 .notion-page {
   display: flex;
@@ -740,9 +715,8 @@ body.sidebar-collapsed .sidebar-tab-chevron {
   border-radius: 6px;
 }
 
-/* Hover hint: text and container title indicate they're editable */
-.notion-text:not([contenteditable="true"]):hover,
-.container-title:not([contenteditable="true"]):hover {
+/* Hover hint: editable text blocks */
+.notion-text:not([contenteditable="true"]):hover {
   cursor: text;
   background: rgba(0, 0, 0, 0.03);
   border-radius: 4px;

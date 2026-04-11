@@ -12,7 +12,6 @@ from app.models.blocks import (
   Block,
   BlockDocument,
   CalloutBlock,
-  ContainerBlock,
   DividerBlock,
   PageBlock,
   QuoteBlock,
@@ -21,7 +20,9 @@ from app.models.blocks import (
 from app.models.orm import BlockRow, DocumentRow
 
 
-_CONTAINER_TYPES: frozenset[str] = frozenset({"container", "toggle", "quote", "callout"})
+# Block types that act as containers: auto-create one child text block on creation
+# and cascade-delete upward when their last child is removed.
+_CHILD_BEARING_TYPES: frozenset[str] = frozenset({"toggle", "quote", "callout"})
 
 
 class SQLiteBlockRepository:
@@ -100,14 +101,9 @@ class SQLiteBlockRepository:
     def build_nodes(parent_id: str | None) -> list[Block]:
       nodes: list[Block] = []
       for item in children_by_parent.get(parent_id, []):
-        if item["type"] == "container":
-          nodes.append(ContainerBlock.model_validate({**item, "children": build_nodes(item["id"])}))
-        elif item["type"] == "toggle":
-          nodes.append(ToggleBlock.model_validate({**item, "children": build_nodes(item["id"])}))
-        elif item["type"] == "quote":
-          nodes.append(QuoteBlock.model_validate({**item, "children": build_nodes(item["id"])}))
-        elif item["type"] == "callout":
-          nodes.append(CalloutBlock.model_validate({**item, "children": build_nodes(item["id"])}))
+        if item["type"] in _CHILD_BEARING_TYPES:
+          model_cls = {"toggle": ToggleBlock, "quote": QuoteBlock, "callout": CalloutBlock}[item["type"]]
+          nodes.append(model_cls.model_validate({**item, "children": build_nodes(item["id"])}))
         elif item["type"] == "heading":
           # heading은 TextBlock으로 통합 — 기존 DB 데이터 하위 호환
           nodes.append(self._block_adapter.validate_python({**item, "type": "text"}))
@@ -248,8 +244,6 @@ class SQLiteBlockRepository:
           default_content = {"text": ""}
         case "image":
           default_content = {"url": "", "caption": ""}
-        case "container":
-          default_content = {"title": "", "layout": "vertical"}
         case "toggle":
           default_content = {"text": "", "is_open": True}
         case "quote":
@@ -285,7 +279,7 @@ class SQLiteBlockRepository:
 
     # ── Container blocks: auto-create one child text block ────────────────────
     child_text_row: dict[str, Any] | None = None
-    if block_type in _CONTAINER_TYPES:
+    if block_type in _CHILD_BEARING_TYPES:
       child_id = str(uuid.uuid4())
       self._session.add(BlockRow(
         id=child_id,
@@ -350,7 +344,7 @@ class SQLiteBlockRepository:
     # ── Cascade: if parent container is now empty, delete it too ─────────────
     if parent_block_id is not None:
       parent_row = self._session.get(BlockRow, parent_block_id)
-      if parent_row is not None and parent_row.type in _CONTAINER_TYPES:
+      if parent_row is not None and parent_row.type in _CHILD_BEARING_TYPES:
         remaining = self._session.execute(
           select(func.count()).where(BlockRow.parent_block_id == parent_block_id)
         ).scalar_one()
@@ -386,8 +380,6 @@ class SQLiteBlockRepository:
         default_content: dict[str, Any] = {"text": ""}
       case "image":
         default_content = {"url": "", "caption": ""}
-      case "container":
-        default_content = {"title": "", "layout": "vertical"}
       case "toggle":
         default_content = {"text": "", "is_open": True}
       case "quote":
@@ -417,7 +409,7 @@ class SQLiteBlockRepository:
     block_row.content_json = json.dumps(default_content, ensure_ascii=False)
 
     # Container types: auto-create one child text block
-    if new_type in _CONTAINER_TYPES:
+    if new_type in _CHILD_BEARING_TYPES:
       child_id = str(uuid.uuid4())
       self._session.add(BlockRow(
         id=child_id,
@@ -492,35 +484,27 @@ class SQLiteBlockRepository:
 
     self._session.add_all([
       # ── intro document ──────────────────────────────────────────────────────
-      BlockRow(id="b-overview", document_id=intro_id, parent_block_id=None, type="container", position=1,
-               content_json=json.dumps({"title": "개요", "layout": "vertical"})),
-      BlockRow(id="b-overview-text", document_id=intro_id, parent_block_id="b-overview", type="text", position=1,
+      BlockRow(id="b-overview-text", document_id=intro_id, parent_block_id=None, type="text", position=1,
                content_json=json.dumps({"text": "Project Manager는 노션 스타일의 블록 인터페이스로 프로젝트와 문서를 관리하는 도구입니다."})),
-      BlockRow(id="b-overview-image", document_id=intro_id, parent_block_id="b-overview", type="image", position=2,
+      BlockRow(id="b-overview-image", document_id=intro_id, parent_block_id=None, type="image", position=2,
                content_json=json.dumps({
                  "url": "https://images.unsplash.com/photo-1611532736597-de2d4265fba3?auto=format&fit=crop&w=1200&q=80",
                  "caption": "블록으로 구성하는 프로젝트 문서",
                })),
-      BlockRow(id="b-block-types", document_id=intro_id, parent_block_id=None, type="container", position=2,
-               content_json=json.dumps({"title": "블록 타입", "layout": "grid"})),
-      BlockRow(id="b-block-text", document_id=intro_id, parent_block_id="b-block-types", type="text", position=1,
+      BlockRow(id="b-block-text", document_id=intro_id, parent_block_id=None, type="text", position=3,
                content_json=json.dumps({"text": "텍스트 블록: 프로젝트 설명, 요구사항, 메모 등 텍스트 콘텐츠를 기록합니다."})),
-      BlockRow(id="b-block-image", document_id=intro_id, parent_block_id="b-block-types", type="text", position=2,
+      BlockRow(id="b-block-image", document_id=intro_id, parent_block_id=None, type="text", position=4,
                content_json=json.dumps({"text": "이미지 블록: 스크린샷, 다이어그램, 참고 이미지를 문서에 삽입합니다."})),
-      BlockRow(id="b-block-container", document_id=intro_id, parent_block_id="b-block-types", type="text", position=3,
-               content_json=json.dumps({"text": "컨테이너 블록: 블록 묶음에 레이아웃(vertical / grid)을 적용해 섹션을 구조화합니다."})),
-      BlockRow(id="b-page-stack", document_id=intro_id, parent_block_id=None, type="page", position=3,
+      BlockRow(id="b-page-stack", document_id=intro_id, parent_block_id=None, type="page", position=5,
                content_json=json.dumps({"document_id": stack_id})),
       # ── tech-stack document ─────────────────────────────────────────────────
-      BlockRow(id="b-stack-overview", document_id=stack_id, parent_block_id=None, type="container", position=1,
-               content_json=json.dumps({"title": "백엔드", "layout": "grid"})),
-      BlockRow(id="b-stack-fastapi", document_id=stack_id, parent_block_id="b-stack-overview", type="text", position=1,
+      BlockRow(id="b-stack-fastapi", document_id=stack_id, parent_block_id=None, type="text", position=1,
                content_json=json.dumps({"text": "FastAPI — Python 기반 비동기 웹 프레임워크"})),
-      BlockRow(id="b-stack-sqlite", document_id=stack_id, parent_block_id="b-stack-overview", type="text", position=2,
+      BlockRow(id="b-stack-sqlite", document_id=stack_id, parent_block_id=None, type="text", position=2,
                content_json=json.dumps({"text": "SQLite — 경량 내장형 관계형 데이터베이스"})),
-      BlockRow(id="b-stack-pydantic", document_id=stack_id, parent_block_id="b-stack-overview", type="text", position=3,
+      BlockRow(id="b-stack-pydantic", document_id=stack_id, parent_block_id=None, type="text", position=3,
                content_json=json.dumps({"text": "Pydantic v2 — 타입 기반 데이터 검증"})),
-      BlockRow(id="b-page-intro", document_id=stack_id, parent_block_id=None, type="page", position=2,
+      BlockRow(id="b-page-intro", document_id=stack_id, parent_block_id=None, type="page", position=4,
                content_json=json.dumps({"document_id": intro_id})),
     ])
     self._session.commit()

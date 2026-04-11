@@ -12,13 +12,23 @@ class BlockBase(BaseModel):
   type: str
 
 
+class ContainerBlockBase(BlockBase):
+  """Internal base for blocks that can contain child blocks.
+
+  Not a user-visible block type — not included in the Block discriminated union.
+  Blocks that accept child blocks (toggle, quote, callout) inherit from this base.
+  """
+
+  children: list["Block"] = Field(default_factory=list)
+
+
 class TextBlock(BlockBase):
   """Plain text paragraph, optionally promoted to a heading via level."""
 
   type: Literal["text"]
   text: str
   level: Literal[1, 2, 3] | None = None
-  formatted_text: str | None = None  # HTML string with inline formatting
+  formatted_text: str | None = None
 
 
 class ImageBlock(BlockBase):
@@ -29,16 +39,7 @@ class ImageBlock(BlockBase):
   caption: str = ""
 
 
-class ContainerBlock(BlockBase):
-  """Container block that groups other blocks."""
-
-  type: Literal["container"]
-  title: str = ""
-  layout: Literal["vertical", "grid"] = "vertical"
-  children: list["Block"] = Field(default_factory=list)
-
-
-class ToggleBlock(BlockBase):
+class ToggleBlock(ContainerBlockBase):
   """Collapsible block with a title and nested child blocks."""
 
   type: Literal["toggle"]
@@ -46,15 +47,13 @@ class ToggleBlock(BlockBase):
   formatted_text: str | None = None
   level: Literal[1, 2, 3] | None = None
   is_open: bool = False
-  children: list["Block"] = Field(default_factory=list)
 
 
-class QuoteBlock(BlockBase):
+class QuoteBlock(ContainerBlockBase):
   """Blockquote with optional nested child blocks."""
 
   type: Literal["quote"]
   text: str = ""
-  children: list["Block"] = Field(default_factory=list)
 
 
 class CodeBlock(BlockBase):
@@ -65,14 +64,13 @@ class CodeBlock(BlockBase):
   language: str = "plain"
 
 
-class CalloutBlock(BlockBase):
+class CalloutBlock(ContainerBlockBase):
   """Highlighted callout box with an emoji icon and background colour."""
 
   type: Literal["callout"]
   text: str = ""
   emoji: str = "💡"
   color: Literal["yellow", "blue", "green", "red", "gray"] = "yellow"
-  children: list["Block"] = Field(default_factory=list)
 
 
 class DividerBlock(BlockBase):
@@ -90,7 +88,7 @@ class PageBlock(BlockBase):
 
 
 Block = Annotated[
-  TextBlock | ImageBlock | ContainerBlock | ToggleBlock | QuoteBlock | CodeBlock | CalloutBlock | DividerBlock | PageBlock,
+  TextBlock | ImageBlock | ToggleBlock | QuoteBlock | CodeBlock | CalloutBlock | DividerBlock | PageBlock,
   Field(discriminator="type"),
 ]
 

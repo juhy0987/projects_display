@@ -324,31 +324,6 @@ function createImageBlock(block) {
   return node;
 }
 
-function createContainerBlock(block) {
-  const template = document.getElementById('container-block-template');
-  const node = template.content.firstElementChild.cloneNode(true);
-  const titleNode = node.querySelector('.container-title');
-  const childrenRoot = node.querySelector('.container-children');
-
-  if (block.title) {
-    titleNode.textContent = block.title;
-    enableContentEditable(titleNode, block.id, 'title', node);
-  } else {
-    titleNode.remove();
-  }
-
-  if (block.layout === 'grid') {
-    childrenRoot.classList.add('is-grid');
-  }
-
-  block.children.forEach((child) => {
-    childrenRoot.appendChild(renderBlock(child, block.id));
-  });
-
-
-  return node;
-}
-
 function createToggleBlock(block) {
   const template = document.getElementById('toggle-block-template');
   const node = template.content.firstElementChild.cloneNode(true);
@@ -666,9 +641,6 @@ export function renderBlock(block, parentBlockId = null) {
     case 'image':
       blockEl = createImageBlock(block);
       break;
-    case 'container':
-      blockEl = createContainerBlock(block);
-      break;
     case 'toggle':
       blockEl = createToggleBlock(block);
       break;
@@ -708,7 +680,7 @@ export function focusBlock(wrapperEl) {
   if (!blockEl) return;
   const target = blockEl.classList.contains('notion-text')
     ? blockEl
-    : (blockEl.querySelector('.notion-caption, .container-title, .toggle-title, .quote-text, .code-content, .callout-text') ?? blockEl);
+    : (blockEl.querySelector('.notion-caption, .toggle-title, .quote-text, .code-content, .callout-text') ?? blockEl);
   target.click();
 }
 
