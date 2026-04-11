@@ -366,7 +366,16 @@ function createToggleBlock(block) {
   // ── Title editing: identical interface to text block ─────────────────────
   makeTextEditable(titleEl, block.id, {
     enableSlash: false,
-    onEnter: () => titleEl.blur(),
+    onEnter: () => {
+      titleEl.blur();
+      // Open toggle if closed, then focus first child block
+      if (!isOpen) {
+        applyOpen(true);
+        apiPatchBlock(block.id, { is_open: true }).catch(console.error);
+      }
+      const firstChild = childrenRoot.querySelector(':scope > .block-wrapper');
+      if (firstChild) focusBlock(firstChild);
+    },
   });
 
   block.children.forEach((child) => {
