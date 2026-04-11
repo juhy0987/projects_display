@@ -1,6 +1,6 @@
 // ── Block renderers ──────────────────────────────────────────────────────────
 
-import { apiPatchBlock, apiUploadImage } from "./api.js";
+import { apiPatchBlock, apiUploadImage, apiChangeBlockType } from "./api.js";
 import { enableContentEditable } from "./editor.js";
 import { openBlockPalette } from "./blockPalette.js";
 import { wrapBlock } from "./blockWrapper.js";
@@ -44,6 +44,7 @@ export const callbacks = {
  * @param {Function} [opts.onEnter]                    - Called on Enter instead of default (add block after)
  * @param {boolean}  [opts.enableSlash=true]           - Enable '/' block palette trigger
  * @param {boolean}  [opts.enableHeading=true]         - Enable '# ' heading promotion
+ * @param {boolean}  [opts.enableTypeShortcuts=true]   - Enable '> ' → toggle conversion
  */
 function makeTextEditable(node, blockId, {
   textField = 'text',
@@ -52,6 +53,7 @@ function makeTextEditable(node, blockId, {
   onEnter = null,
   enableSlash = true,
   enableHeading = true,
+  enableTypeShortcuts = true,
 } = {}) {
   let originalHtml = node.innerHTML;
   let originalText = node.textContent;
@@ -179,20 +181,37 @@ function makeTextEditable(node, blockId, {
       return;
     }
 
-    if (enableHeading && e.key === ' ') {
+    if (e.key === ' ') {
       const raw = node.textContent;
-      const exactPrefix = raw.match(/^(#{1,3})$/);
-      if (!exactPrefix) return;
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      const newLevel = exactPrefix[1].length;
-      node.textContent = '';
-      node.dataset.level = String(newLevel);
-      const patch = { level: newLevel, [textField]: '', [htmlField]: '' };
-      currentLevel = newLevel;
-      originalText = '';
-      originalHtml = '';
-      apiPatchBlock(blockId, patch).catch(console.error);
+
+      // '> ' → convert block to toggle
+      if (enableTypeShortcuts && raw === '>') {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        node.contentEditable = 'false';
+        node.classList.remove('is-editing');
+        clearEditingNode();
+        apiChangeBlockType(blockId, 'toggle')
+          .then(() => callbacks.reloadDocument?.())
+          .catch(console.error);
+        return;
+      }
+
+      // '# ' / '## ' / '### ' → heading promotion
+      if (enableHeading) {
+        const exactPrefix = raw.match(/^(#{1,3})$/);
+        if (!exactPrefix) return;
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        const newLevel = exactPrefix[1].length;
+        node.textContent = '';
+        node.dataset.level = String(newLevel);
+        const patch = { [levelField]: newLevel, [textField]: '', [htmlField]: '' };
+        currentLevel = newLevel;
+        originalText = '';
+        originalHtml = '';
+        apiPatchBlock(blockId, patch).catch(console.error);
+      }
     }
 
     if (e.ctrlKey || e.metaKey) {
@@ -366,6 +385,7 @@ function createToggleBlock(block) {
   // ── Title editing: identical interface to text block ─────────────────────
   makeTextEditable(titleEl, block.id, {
     enableSlash: false,
+    enableTypeShortcuts: false,
     onEnter: () => {
       titleEl.blur();
       // Open toggle if closed, then focus first child block
