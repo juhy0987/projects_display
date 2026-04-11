@@ -30,29 +30,36 @@ export const callbacks = {
   onTitleChanged: null,     // (documentId, newTitle) => void — propagate title change to page blocks
 };
 
-// ── Individual block creators ─────────────────────────────────────────────────
+// ── Shared text-editing behaviour ────────────────────────────────────────────
 
-function createTextBlock(block) {
-  const template = document.getElementById('text-block-template');
-  const node = template.content.firstElementChild.cloneNode(true);
-
-  // Render formatted HTML when available, fall back to plain text
-  if (block.formatted_text) {
-    node.innerHTML = sanitizeHtml(block.formatted_text);
-  } else {
-    node.textContent = block.text;
-  }
-
-  if (block.level) node.dataset.level = String(block.level);
-
+/**
+ * Attach text-block–style editing behaviour to any element.
+ *
+ * @param {HTMLElement} node      - Element to make editable
+ * @param {string}      blockId   - Block ID for PATCH calls
+ * @param {object}      opts
+ * @param {string}   [opts.textField='text']           - Plain-text field name
+ * @param {string}   [opts.htmlField='formatted_text'] - Rich-HTML field name
+ * @param {string}   [opts.levelField='level']         - Heading level field name
+ * @param {Function} [opts.onEnter]                    - Called on Enter instead of default (add block after)
+ * @param {boolean}  [opts.enableSlash=true]           - Enable '/' block palette trigger
+ * @param {boolean}  [opts.enableHeading=true]         - Enable '# ' heading promotion
+ */
+function makeTextEditable(node, blockId, {
+  textField = 'text',
+  htmlField = 'formatted_text',
+  levelField = 'level',
+  onEnter = null,
+  enableSlash = true,
+  enableHeading = true,
+} = {}) {
   let originalHtml = node.innerHTML;
   let originalText = node.textContent;
-  let currentLevel = block.level ?? null;
+  let currentLevel = node.dataset.level ? Number(node.dataset.level) : null;
   let escaped = false;
 
   // ── Click: activate editing (but let link clicks open the URL) ──────────
   node.addEventListener('click', (e) => {
-    // When not editing, a click on a link should navigate, not start editing
     if (node.contentEditable !== 'true') {
       const anchor = e.target.closest('a[href]');
       if (anchor) {
@@ -78,7 +85,6 @@ function createTextBlock(block) {
 
   // ── Blur: save and deactivate ────────────────────────────────────────────
   node.addEventListener('blur', (e) => {
-    // Focus moved into the formatting toolbar (e.g. link input) — stay in editing mode
     if (isInsideToolbar(e.relatedTarget)) return;
     if (node.contentEditable !== 'true') return;
     node.contentEditable = 'false';
@@ -87,43 +93,42 @@ function createTextBlock(block) {
 
     if (escaped) { escaped = false; return; }
 
-    // Handle pasted "# Title" heading promotion form
-    const raw = node.textContent;
-    const headingMatch = raw.match(/^(#{1,3})\s+(\S.*)?$/);
-    if (headingMatch) {
-      const newLevel = headingMatch[1].length;
-      const newText = (headingMatch[2] ?? '').trimEnd();
-      node.textContent = newText;
-      node.dataset.level = String(newLevel);
-      const patch = {};
-      if (newLevel !== currentLevel) patch.level = newLevel;
-      if (newText !== originalText) patch.text = newText;
-      patch.formatted_text = '';
-      currentLevel = newLevel;
-      originalText = newText;
-      originalHtml = node.innerHTML;
-      apiPatchBlock(block.id, patch).catch(console.error);
-      return;
+    if (enableHeading) {
+      const raw = node.textContent;
+      const headingMatch = raw.match(/^(#{1,3})\s+(\S.*)?$/);
+      if (headingMatch) {
+        const newLevel = headingMatch[1].length;
+        const newText = (headingMatch[2] ?? '').trimEnd();
+        node.textContent = newText;
+        node.dataset.level = String(newLevel);
+        const patch = {};
+        if (newLevel !== currentLevel) patch[levelField] = newLevel;
+        if (newText !== originalText) patch[textField] = newText;
+        patch[htmlField] = '';
+        currentLevel = newLevel;
+        originalText = newText;
+        originalHtml = node.innerHTML;
+        apiPatchBlock(blockId, patch).catch(console.error);
+        return;
+      }
     }
 
-    // Normal save: patch both text and formatted_text when changed
     const newText = node.textContent.trim();
     const newHtml = sanitizeHtml(node.innerHTML);
     const patch = {};
-    if (newText !== originalText) patch.text = newText;
-    if (newHtml !== sanitizeHtml(originalHtml)) patch.formatted_text = newHtml;
+    if (newText !== originalText) patch[textField] = newText;
+    if (newHtml !== sanitizeHtml(originalHtml)) patch[htmlField] = newHtml;
     if (Object.keys(patch).length) {
       originalText = newText;
       originalHtml = node.innerHTML;
-      apiPatchBlock(block.id, patch).catch(console.error);
+      apiPatchBlock(blockId, patch).catch(console.error);
     }
   });
 
   // ── Keydown: formatting shortcuts + heading promotion + slash command ────
   // Capture phase: intercepts Enter/Space for heading promotion before bubble handlers
   node.addEventListener('keydown', (e) => {
-    // Slash command: open palette when '/' is typed in an empty block
-    if (e.key === '/' && node.contentEditable === 'true' && !node.textContent.trim()) {
+    if (enableSlash && e.key === '/' && node.contentEditable === 'true' && !node.textContent.trim()) {
       e.preventDefault();
       node.blur();
       const slashParentId = node.closest('.block-wrapper')?.dataset.parentBlockId || null;
@@ -133,7 +138,6 @@ function createTextBlock(block) {
 
     if (node.contentEditable !== 'true') return;
 
-    // Escape: cancel editing and restore original content
     if (e.key === 'Escape') {
       e.preventDefault();
       escaped = true;
@@ -144,36 +148,38 @@ function createTextBlock(block) {
       return;
     }
 
-    // Enter (no shift): either new block or heading promotion
     if (e.key === 'Enter' && !e.shiftKey) {
-      const raw = node.textContent;
-      const exactPrefix = raw.match(/^(#{1,3})$/);
-      if (exactPrefix) {
-        // Heading promotion
-        e.preventDefault();
-        e.stopImmediatePropagation();
-        const newLevel = exactPrefix[1].length;
-        node.textContent = '';
-        node.dataset.level = String(newLevel);
-        const patch = { level: newLevel, text: '', formatted_text: '' };
-        currentLevel = newLevel;
-        originalText = '';
-        originalHtml = '';
-        apiPatchBlock(block.id, patch).catch(console.error);
-        return;
+      if (enableHeading) {
+        const raw = node.textContent;
+        const exactPrefix = raw.match(/^(#{1,3})$/);
+        if (exactPrefix) {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          const newLevel = exactPrefix[1].length;
+          node.textContent = '';
+          node.dataset.level = String(newLevel);
+          const patch = { [levelField]: newLevel, [textField]: '', [htmlField]: '' };
+          currentLevel = newLevel;
+          originalText = '';
+          originalHtml = '';
+          apiPatchBlock(blockId, patch).catch(console.error);
+          return;
+        }
       }
       e.preventDefault();
-      node.blur();
-      const parentBlockId =
-        node.closest('.block-wrapper')?.dataset.parentBlockId || null;
-      if (callbacks.addBlockAfter) {
-        callbacks.addBlockAfter('text', block.id, parentBlockId).catch(console.error);
+      if (onEnter) {
+        onEnter();
+      } else {
+        node.blur();
+        const parentBlockId = node.closest('.block-wrapper')?.dataset.parentBlockId || null;
+        if (callbacks.addBlockAfter) {
+          callbacks.addBlockAfter('text', blockId, parentBlockId).catch(console.error);
+        }
       }
       return;
     }
 
-    // Space: heading promotion when content is exactly #, ##, or ###
-    if (e.key === ' ') {
+    if (enableHeading && e.key === ' ') {
       const raw = node.textContent;
       const exactPrefix = raw.match(/^(#{1,3})$/);
       if (!exactPrefix) return;
@@ -182,20 +188,36 @@ function createTextBlock(block) {
       const newLevel = exactPrefix[1].length;
       node.textContent = '';
       node.dataset.level = String(newLevel);
-      const patch = { level: newLevel, text: '', formatted_text: '' };
+      const patch = { level: newLevel, [textField]: '', [htmlField]: '' };
       currentLevel = newLevel;
       originalText = '';
       originalHtml = '';
-      apiPatchBlock(block.id, patch).catch(console.error);
+      apiPatchBlock(blockId, patch).catch(console.error);
     }
 
-    // Formatting keyboard shortcuts (Ctrl/Cmd + B / I / U)
     if (e.ctrlKey || e.metaKey) {
       if (e.key === 'b') { e.preventDefault(); document.execCommand('bold', false); }
       else if (e.key === 'i') { e.preventDefault(); document.execCommand('italic', false); }
       else if (e.key === 'u') { e.preventDefault(); document.execCommand('underline', false); }
     }
   }, { capture: true });
+}
+
+// ── Individual block creators ─────────────────────────────────────────────────
+
+function createTextBlock(block) {
+  const template = document.getElementById('text-block-template');
+  const node = template.content.firstElementChild.cloneNode(true);
+
+  if (block.formatted_text) {
+    node.innerHTML = sanitizeHtml(block.formatted_text);
+  } else {
+    node.textContent = block.text;
+  }
+
+  if (block.level) node.dataset.level = String(block.level);
+
+  makeTextEditable(node, block.id);
 
   return node;
 }
@@ -332,6 +354,7 @@ function createToggleBlock(block) {
   } else {
     titleEl.textContent = block.title || '';
   }
+  if (block.level) titleEl.dataset.level = String(block.level);
 
   // ── Arrow button: only way to open/close ────────────────────────────────
   arrowBtn.addEventListener('click', (e) => {
@@ -340,71 +363,13 @@ function createToggleBlock(block) {
     apiPatchBlock(block.id, { is_open: isOpen }).catch(console.error);
   });
 
-  // ── Title editing (mirrors text block: formatting toolbar + shortcuts) ───
-  let originalHtml = titleEl.innerHTML;
-  let originalText = titleEl.textContent;
-  let titleEscaped = false;
-
-  titleEl.addEventListener('click', (e) => {
-    e.stopPropagation();
-    if (e.target === arrowBtn) return;
-    if (titleEl.contentEditable === 'true') return;
-    originalHtml = titleEl.innerHTML;
-    originalText = titleEl.textContent;
-    titleEscaped = false;
-    titleEl.contentEditable = 'true';
-    titleEl.classList.add('is-editing');
-    setEditingNode(titleEl);
-    titleEl.focus();
-    const sel = window.getSelection();
-    const range = document.createRange();
-    range.selectNodeContents(titleEl);
-    range.collapse(false);
-    if (sel) { sel.removeAllRanges(); sel.addRange(range); }
-  });
-
-  titleEl.addEventListener('blur', (e) => {
-    if (isInsideToolbar(e.relatedTarget)) return;
-    if (titleEl.contentEditable !== 'true') return;
-    titleEl.contentEditable = 'false';
-    titleEl.classList.remove('is-editing');
-    clearEditingNode();
-    if (titleEscaped) { titleEscaped = false; return; }
-    const newText = titleEl.textContent.trim();
-    const newHtml = sanitizeHtml(titleEl.innerHTML);
-    const patch = {};
-    if (newText !== originalText) patch.title = newText;
-    if (newHtml !== sanitizeHtml(originalHtml)) patch.formatted_title = newHtml;
-    if (Object.keys(patch).length) {
-      originalText = newText;
-      originalHtml = titleEl.innerHTML;
-      apiPatchBlock(block.id, patch).catch(console.error);
-    }
-  });
-
-  titleEl.addEventListener('keydown', (e) => {
-    if (titleEl.contentEditable !== 'true') return;
-    if (e.key === 'Escape') {
-      e.preventDefault();
-      titleEscaped = true;
-      titleEl.innerHTML = originalHtml;
-      titleEl.contentEditable = 'false';
-      titleEl.classList.remove('is-editing');
-      clearEditingNode();
-      return;
-    }
-    // Enter: stop editing (title is single-line)
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      titleEl.blur();
-      return;
-    }
-    // Formatting shortcuts
-    if (e.ctrlKey || e.metaKey) {
-      if (e.key === 'b') { e.preventDefault(); document.execCommand('bold', false); }
-      else if (e.key === 'i') { e.preventDefault(); document.execCommand('italic', false); }
-      else if (e.key === 'u') { e.preventDefault(); document.execCommand('underline', false); }
-    }
+  // ── Title editing: same interface as text block ──────────────────────────
+  makeTextEditable(titleEl, block.id, {
+    textField: 'title',
+    htmlField: 'formatted_title',
+    enableSlash: false,
+    enableHeading: true,
+    onEnter: () => titleEl.blur(),
   });
 
   block.children.forEach((child) => {

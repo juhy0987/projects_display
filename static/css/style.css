@@ -519,23 +519,26 @@ body.sidebar-collapsed .sidebar-tab-chevron {
   color: #6f3f37;
 }
 
-/* ── Heading via TextBlock (data-level) ──────────────────────────────────── */
+/* ── Heading via TextBlock / toggle title (data-level) ───────────────────── */
 
-.notion-text[data-level="1"] {
+.notion-text[data-level="1"],
+.toggle-title[data-level="1"] {
   font-family: "Fraunces", serif;
   font-size: 1.75rem;
   font-weight: 700;
   color: var(--ink);
 }
 
-.notion-text[data-level="2"] {
+.notion-text[data-level="2"],
+.toggle-title[data-level="2"] {
   font-family: "Fraunces", serif;
   font-size: 1.3rem;
   font-weight: 700;
   color: var(--ink);
 }
 
-.notion-text[data-level="3"] {
+.notion-text[data-level="3"],
+.toggle-title[data-level="3"] {
   font-size: 1.05rem;
   font-weight: 600;
   color: var(--ink-soft);
@@ -594,6 +597,8 @@ body.sidebar-collapsed .sidebar-tab-chevron {
   outline: none;
   cursor: text;
   min-height: calc(1.6em + 0.64rem);
+  display: flex;
+  align-items: center;
 }
 
 .toggle-children {
