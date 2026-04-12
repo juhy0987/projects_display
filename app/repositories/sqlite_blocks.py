@@ -230,7 +230,7 @@ class SQLiteBlockRepository:
     return DbContext(
       block_id=db_row_block_id,
       db_block_id=db_block_id,
-      schema=schema,
+      columns=schema,
       properties=properties,
     )
 
