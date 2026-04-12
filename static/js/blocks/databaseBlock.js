@@ -231,7 +231,7 @@ export function create(block, { callbacks = {} } = {}) {
     addColBtn.className = "db-add-col-btn";
     addColBtn.textContent = "+";
     addColBtn.title = "컬럼 추가";
-    addColBtn.addEventListener("click", () => promptAddColumn());
+    addColBtn.addEventListener("click", () => startAddColumn(thAdd));
     thAdd.appendChild(addColBtn);
     tr.appendChild(thAdd);
 
@@ -367,15 +367,51 @@ export function create(block, { callbacks = {} } = {}) {
     });
   }
 
-  async function promptAddColumn() {
-    const name = prompt("새 컬럼 이름:");
-    if (!name || !name.trim()) return;
-    try {
-      await apiAddDbColumn(block.id, name.trim());
-      if (callbacks.reloadDocument) callbacks.reloadDocument();
-    } catch (err) {
-      console.error("컬럼 추가 실패:", err);
+  function startAddColumn(thAdd) {
+    // 이미 추가 중이면 중복 방지
+    if (thead.querySelector(".db-col-new-input")) return;
+
+    const thNew = document.createElement("th");
+    thNew.className = "db-th";
+
+    const input = document.createElement("input");
+    input.type = "text";
+    input.className = "db-col-rename-input db-col-new-input";
+    input.placeholder = "컬럼 이름";
+    thNew.appendChild(input);
+    thAdd.before(thNew);
+    input.focus();
+
+    let committed = false;
+
+    async function commit() {
+      if (committed) return;
+      committed = true;
+      const name = input.value.trim();
+      if (!name) {
+        thNew.remove();
+        return;
+      }
+      try {
+        await apiAddDbColumn(block.id, name);
+        if (callbacks.reloadDocument) callbacks.reloadDocument();
+      } catch (err) {
+        console.error("컬럼 추가 실패:", err);
+        thNew.remove();
+      }
     }
+
+    function cancel() {
+      if (committed) return;
+      committed = true;
+      thNew.remove();
+    }
+
+    input.addEventListener("blur", commit);
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); input.blur(); }
+      if (e.key === "Escape") { cancel(); }
+    });
   }
 
   // 최초 렌더
