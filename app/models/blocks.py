@@ -85,6 +85,8 @@ class PageBlock(BlockBase):
   type: Literal["page"]
   document_id: str
   title: str = ""  # populated at query time from the referenced document
+  is_reference: bool = False  # True when linking to a pre-existing document (not auto-created)
+  is_broken_ref: bool = False  # True when the target document no longer exists
 
 
 Block = Annotated[

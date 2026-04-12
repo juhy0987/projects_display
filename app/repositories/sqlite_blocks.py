@@ -35,6 +35,10 @@ class SQLiteBlockRepository:
 
   # ── Documents ──────────────────────────────────────────────────────────────
 
+  def document_exists(self, document_id: str) -> bool:
+    """Return True if a document with the given id exists."""
+    return self._session.get(DocumentRow, document_id) is not None
+
   def list_documents(self) -> list[dict]:
     """Return all documents as a parent-child tree sorted by title.
 
@@ -119,9 +123,12 @@ class SQLiteBlockRepository:
         elif item["type"] == "divider":
           nodes.append(DividerBlock.model_validate(item))
         elif item["type"] == "page":
+          doc_id = item.get("document_id", "")
+          is_broken = bool(doc_id) and doc_id not in doc_titles
           nodes.append(PageBlock.model_validate({
             **item,
-            "title": doc_titles.get(item.get("document_id", ""), "알 수 없는 문서"),
+            "title": "" if is_broken else doc_titles.get(doc_id, ""),
+            "is_broken_ref": is_broken,
           }))
         else:
           nodes.append(self._block_adapter.validate_python(item))
@@ -223,6 +230,7 @@ class SQLiteBlockRepository:
     document_id: str,
     block_type: str,
     parent_block_id: str | None = None,
+    target_document_id: str | None = None,
   ) -> dict[str, Any] | None:
     """Append a new block of the given type at the end of its sibling list.
 
@@ -241,12 +249,22 @@ class SQLiteBlockRepository:
       if parent_exists is None:
         return None
 
-    # ── Page block: auto-create a child document (single transaction) ────────
+    # ── Page block: link to existing or auto-create a child document ─────────
     if block_type == "page":
-      # Use _build_child_document_row (no commit) so both the new document and
-      # the page block are committed together below, keeping the DB consistent.
-      child_doc = self._build_child_document_row(document_id)
-      default_content: dict[str, Any] = {"document_id": child_doc["id"]}
+      if target_document_id is not None:
+        # Reference an existing document without changing its parent.
+        if self._session.get(DocumentRow, target_document_id) is None:
+          return None
+        default_content: dict[str, Any] = {
+          "document_id": target_document_id,
+          "is_reference": True,
+        }
+        child_doc = None
+      else:
+        # Use _build_child_document_row (no commit) so both the new document and
+        # the page block are committed together below, keeping the DB consistent.
+        child_doc = self._build_child_document_row(document_id)
+        default_content = {"document_id": child_doc["id"], "is_reference": False}
     else:
       match block_type:
         case "text":
@@ -304,8 +322,14 @@ class SQLiteBlockRepository:
 
     result: dict[str, Any] = {"id": block_id, "type": block_type, **default_content}
     if block_type == "page":
-      result["title"] = child_doc["title"]
-      result["child_document"] = child_doc
+      if child_doc is not None:
+        result["title"] = child_doc["title"]
+        result["child_document"] = child_doc
+      else:
+        ref_title = self._session.execute(
+          select(DocumentRow.title).where(DocumentRow.id == target_document_id)
+        ).scalar_one_or_none()
+        result["title"] = ref_title or ""
     if child_text_row is not None:
       result["children"] = [child_text_row]
     return result
@@ -313,18 +337,22 @@ class SQLiteBlockRepository:
   def delete_block(self, block_id: str) -> bool:
     """Delete a block and all its descendants. Compacts sibling positions after deletion.
 
-    When deleting a page block, the referenced document is promoted to root
-    (parent_id cleared) so it is not orphaned.
+    For owned page blocks (is_reference=False) the referenced document is promoted
+    to root (parent_id cleared) so it is not orphaned.
+    Reference page blocks (is_reference=True) are removed without touching the
+    target document's parent hierarchy.
     """
     block_row = self._session.get(BlockRow, block_id)
     if block_row is None:
       return False
 
-    # Promote referenced document if this is a page block
+    # Promote referenced document to root only when this page block owns it.
+    # Reference blocks (is_reference=True) merely link to an existing document
+    # whose parent hierarchy must not be disturbed.
     if block_row.type == "page":
       content = json.loads(block_row.content_json)
       ref_doc_id = content.get("document_id")
-      if ref_doc_id:
+      if ref_doc_id and not content.get("is_reference", False):
         self._session.execute(
           update(DocumentRow)
           .where(DocumentRow.id == ref_doc_id)

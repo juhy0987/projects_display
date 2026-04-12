@@ -9,6 +9,7 @@ import {
   apiCreateBlock,
   apiMoveBlock,
 } from "./api.js";
+import { openPagePickerModal } from "./pagePickerModal.js";
 import { callbacks, renderBlock, renderDocument, focusBlock } from "./blockRenderers.js";
 import { addDocumentItem, closeAllMenus, setActiveItem, enterInlineEdit } from "./documentList.js";
 import { initSidebar } from "./sidebar.js";
@@ -154,8 +155,29 @@ async function initGallery() {
   async function loadDocument(documentId, { focusBlockId = null } = {}) {
     activeDocId = documentId;
 
+    /**
+     * Resolve page block creation parameters using the picker modal.
+     * Returns { targetDocumentId } where null means "create new page".
+     * Returns null when the user dismisses the modal without selecting.
+     * @param {HTMLElement} anchorEl
+     */
+    async function pickPageTarget(anchorEl) {
+      const choice = await openPagePickerModal(anchorEl, activeDocId);
+      if (!choice) return null;
+      return { targetDocumentId: choice.action === 'reference' ? choice.documentId : null };
+    }
+
     callbacks.addBlockAfter = async (type, afterBlockId, parentBlockId = null) => {
-      const newBlock = await apiCreateBlock(activeDocId, type, parentBlockId);
+      let targetDocumentId = null;
+      if (type === 'page') {
+        const afterWrapper = document.querySelector(`[data-block-id="${afterBlockId}"]`);
+        const anchorEl = afterWrapper ?? root;
+        const pick = await pickPageTarget(anchorEl);
+        if (pick === null) return;
+        targetDocumentId = pick.targetDocumentId;
+      }
+
+      const newBlock = await apiCreateBlock(activeDocId, type, parentBlockId, targetDocumentId);
       const afterWrapper = document.querySelector(`[data-block-id="${afterBlockId}"]`);
       if (afterWrapper) {
         const newWrapper = renderBlock(newBlock, parentBlockId);
@@ -174,7 +196,18 @@ async function initGallery() {
     };
 
     const addBlock = async (type, parentBlockId = null) => {
-      const newBlock = await apiCreateBlock(activeDocId, type, parentBlockId);
+      let targetDocumentId = null;
+      if (type === 'page') {
+        const containerEl = parentBlockId
+          ? document.querySelector(`[data-block-id="${parentBlockId}"] [data-block-children]`)
+          : root;
+        const anchorEl = containerEl?.lastElementChild ?? root;
+        const pick = await pickPageTarget(anchorEl);
+        if (pick === null) return;
+        targetDocumentId = pick.targetDocumentId;
+      }
+
+      const newBlock = await apiCreateBlock(activeDocId, type, parentBlockId, targetDocumentId);
       const containerEl = parentBlockId
         ? document.querySelector(`[data-block-id="${parentBlockId}"] [data-block-children]`)
         : root;

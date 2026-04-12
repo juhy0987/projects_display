@@ -41,11 +41,13 @@ export async function apiPatchBlock(blockId, fields) {
   if (!res.ok) throw new Error('Failed to update block');
 }
 
-export async function apiCreateBlock(documentId, type, parentBlockId = null) {
+export async function apiCreateBlock(documentId, type, parentBlockId = null, targetDocumentId = null) {
+  const body = { type, parent_block_id: parentBlockId };
+  if (targetDocumentId !== null) body.target_document_id = targetDocumentId;
   const res = await fetch(`/api/documents/${documentId}/blocks`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ type, parent_block_id: parentBlockId }),
+    body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error('Failed to create block');
   return res.json();

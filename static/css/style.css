@@ -483,6 +483,136 @@ body.sidebar-collapsed .sidebar-tab-chevron {
   color: var(--ink);
 }
 
+/* ── Page block: broken reference state ──────────────────────────────────── */
+
+.notion-page.is-broken-ref {
+  opacity: 0.55;
+  cursor: default;
+  pointer-events: none;
+}
+
+.notion-page.is-broken-ref .page-block-icon {
+  color: #b45309;
+}
+
+.notion-page.is-broken-ref .page-block-title {
+  color: #92400e;
+  text-decoration: line-through;
+}
+
+/* ── Page picker modal ───────────────────────────────────────────────────── */
+
+.page-picker-modal {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 240px;
+  max-width: 320px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow: 0 8px 20px -6px var(--shadow);
+  margin-top: 0.3rem;
+  overflow: hidden;
+  animation: fade-slide-up 0.18s ease both;
+  z-index: 200;
+}
+
+.page-picker-option {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.55rem 0.75rem;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s;
+}
+
+.page-picker-option:hover {
+  background: var(--accent-soft);
+}
+
+.page-picker-icon {
+  font-style: normal;
+  color: var(--accent);
+  font-size: 0.95rem;
+}
+
+.page-picker-divider {
+  height: 1px;
+  background: var(--line);
+  margin: 0;
+}
+
+.page-picker-search {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: none;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  font-family: inherit;
+  font-size: 0.85rem;
+  color: var(--ink);
+  outline: none;
+  box-sizing: border-box;
+}
+
+.page-picker-search::placeholder {
+  color: var(--ink-soft);
+}
+
+.page-picker-list {
+  list-style: none;
+  margin: 0;
+  padding: 0.25rem 0;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.page-picker-item {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.85rem;
+  color: var(--ink);
+  cursor: pointer;
+  transition: background 0.1s;
+  outline: none;
+}
+
+.page-picker-item:hover,
+.page-picker-item:focus {
+  background: var(--accent-soft);
+}
+
+.page-picker-item-icon {
+  color: var(--accent);
+  font-size: 0.85rem;
+  flex-shrink: 0;
+}
+
+.page-picker-item-title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.page-picker-empty {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.82rem;
+  color: var(--ink-soft);
+  list-style: none;
+}
+
 .unsupported-block,
 .error-state,
 .empty-state {
