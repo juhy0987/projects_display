@@ -66,7 +66,7 @@ def update_document_title(
 
 
 class BlockCreate(BaseModel):
-  type: Literal["text", "image", "toggle", "quote", "code", "callout", "divider", "page", "database", "db_row"]
+  type: Literal["text", "image", "toggle", "quote", "code", "callout", "divider", "url_embed", "page", "database", "db_row"]
   parent_block_id: str | None = None
   # Only used when type="page": link to an existing document instead of creating a new one
   target_document_id: str | None = None

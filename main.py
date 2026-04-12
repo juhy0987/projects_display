@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.requests import Request
 
-from app.routers import blocks, database, documents, upload
+from app.routers import blocks, database, documents, upload, url_embed
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -20,6 +20,7 @@ app.include_router(documents.router)
 app.include_router(blocks.router)
 app.include_router(database.router)
 app.include_router(upload.router)
+app.include_router(url_embed.router)
 
 
 @app.get("/", response_class=HTMLResponse)

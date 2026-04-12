@@ -39,7 +39,7 @@ class BlockPositionPatch(BaseModel):
 
 
 class BlockTypeChange(BaseModel):
-  type: Literal["text", "image", "toggle", "quote", "code", "callout", "divider"]
+  type: Literal["text", "image", "toggle", "quote", "code", "callout", "divider", "url_embed"]
 
 
 @router.patch("/{block_id}")
