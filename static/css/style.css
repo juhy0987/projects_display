@@ -1595,6 +1595,10 @@ body.sidebar-collapsed .sidebar-tab-chevron {
   width: 196px;
 }
 
+.db-color-palette[hidden] {
+  display: none;
+}
+
 .db-color-swatch {
   width: 28px;
   height: 28px;
