@@ -12,12 +12,21 @@ router = APIRouter(prefix="/api/blocks", tags=["blocks"])
 
 
 class BlockPatch(BaseModel):
+  # text / heading
   text: str | None = None
-  url: str | None = None
-  caption: str | None = None
-  title: str | None = None
   level: Literal[1, 2, 3] | None = None
   formatted_text: str | None = None  # HTML string with inline formatting
+  # image
+  url: str | None = None
+  caption: str | None = None
+  # toggle
+  is_open: bool | None = None
+  # code
+  code: str | None = None
+  language: str | None = None
+  # callout
+  emoji: str | None = None
+  color: Literal["yellow", "blue", "green", "red", "gray"] | None = None
 
 
 class BlockPositionPatch(BaseModel):
@@ -25,7 +34,7 @@ class BlockPositionPatch(BaseModel):
 
 
 class BlockTypeChange(BaseModel):
-  type: Literal["text", "image", "container", "divider"]
+  type: Literal["text", "image", "toggle", "quote", "code", "callout", "divider"]
 
 
 @router.patch("/{block_id}")

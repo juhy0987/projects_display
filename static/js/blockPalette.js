@@ -5,7 +5,10 @@ import { apiDeleteBlock } from "./api.js";
 export const BLOCK_PALETTE_ITEMS = [
   { type: 'text', label: '텍스트', icon: 'T' },
   { type: 'image', label: '이미지', icon: '▣' },
-  { type: 'container', label: '컨테이너', icon: '⊞' },
+  { type: 'toggle', label: '토글', icon: '▶' },
+  { type: 'quote', label: '인용', icon: '"' },
+  { type: 'code', label: '코드', icon: '⟨⟩' },
+  { type: 'callout', label: '콜아웃', icon: '💡' },
   { type: 'divider', label: '구분선', icon: '—' },
   { type: 'page', label: '페이지', icon: '⊔' },
 ];

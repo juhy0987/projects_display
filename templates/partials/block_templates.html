@@ -9,12 +9,6 @@
   </figure>
 </template>
 
-<template id="container-block-template">
-  <section class="notion-block notion-container">
-    <header class="container-title"></header>
-    <div class="container-children"></div>
-  </section>
-</template>
 
 <template id="page-block-template">
   <button type="button" class="notion-block notion-page">
@@ -25,4 +19,41 @@
 
 <template id="divider-block-template">
   <hr class="notion-block notion-divider" />
+</template>
+
+<template id="toggle-block-template">
+  <div class="notion-block notion-toggle">
+    <div class="toggle-header">
+      <button type="button" class="toggle-arrow-btn" aria-label="토글 열기/닫기" aria-expanded="false">▶</button>
+      <p class="toggle-title" tabindex="0"></p>
+    </div>
+    <div class="toggle-children" data-block-children hidden></div>
+  </div>
+</template>
+
+<template id="quote-block-template">
+  <blockquote class="notion-block notion-quote">
+    <p class="quote-text"></p>
+    <div class="quote-children" data-block-children></div>
+  </blockquote>
+</template>
+
+<template id="code-block-template">
+  <div class="notion-block notion-code">
+    <div class="code-header">
+      <select class="code-language-select"></select>
+      <button type="button" class="code-copy-btn">복사</button>
+    </div>
+    <pre class="code-body"><code class="code-content" spellcheck="false"></code></pre>
+  </div>
+</template>
+
+<template id="callout-block-template">
+  <div class="notion-block notion-callout">
+    <span class="callout-emoji"></span>
+    <div class="callout-body">
+      <p class="callout-text"></p>
+      <div class="callout-children" data-block-children></div>
+    </div>
+  </div>
 </template>

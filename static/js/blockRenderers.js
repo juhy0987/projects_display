@@ -1,6 +1,6 @@
 // ── Block renderers ──────────────────────────────────────────────────────────
 
-import { apiPatchBlock, apiUploadImage } from "./api.js";
+import { apiPatchBlock, apiUploadImage, apiChangeBlockType } from "./api.js";
 import { enableContentEditable } from "./editor.js";
 import { openBlockPalette } from "./blockPalette.js";
 import { wrapBlock } from "./blockWrapper.js";
@@ -30,29 +30,42 @@ export const callbacks = {
   onTitleChanged: null,     // (documentId, newTitle) => void — propagate title change to page blocks
 };
 
-// ── Individual block creators ─────────────────────────────────────────────────
+// ── Shared text-editing behaviour ────────────────────────────────────────────
 
-function createTextBlock(block) {
-  const template = document.getElementById('text-block-template');
-  const node = template.content.firstElementChild.cloneNode(true);
-
-  // Render formatted HTML when available, fall back to plain text
-  if (block.formatted_text) {
-    node.innerHTML = sanitizeHtml(block.formatted_text);
-  } else {
-    node.textContent = block.text;
-  }
-
-  if (block.level) node.dataset.level = String(block.level);
-
+/**
+ * Attach text-block–style editing behaviour to any element.
+ *
+ * @param {HTMLElement} node      - Element to make editable
+ * @param {string}      blockId   - Block ID for PATCH calls
+ * @param {object}      opts
+ * @param {string}   [opts.textField='text']           - Plain-text field name
+ * @param {string}   [opts.htmlField='formatted_text'] - Rich-HTML field name
+ * @param {string}   [opts.levelField='level']         - Heading level field name
+ * @param {Function} [opts.onEnter]                    - Called on Enter instead of default (add block after)
+ * @param {boolean}  [opts.enableSlash=true]           - Enable '/' block palette trigger
+ * @param {boolean}  [opts.enableHeading=true]         - Enable '# ' heading promotion
+ * @param {boolean}  [opts.enableTypeShortcuts=true]   - Enable '> ' → toggle conversion
+ */
+function makeTextEditable(node, blockId, {
+  textField = 'text',
+  htmlField = 'formatted_text',
+  levelField = 'level',
+  onEnter = null,
+  enableSlash = true,
+  enableHeading = true,
+  enableTypeShortcuts = true,
+} = {}) {
   let originalHtml = node.innerHTML;
   let originalText = node.textContent;
-  let currentLevel = block.level ?? null;
+  let currentLevel = node.dataset.level ? Number(node.dataset.level) : null;
   let escaped = false;
+
+  // is-editing은 가장 가까운 .notion-block에 적용 (toggle-title처럼 node 자체가
+  // .notion-block이 아닌 경우에도 편집 상태 스타일이 일관되게 동작하도록)
+  const editingTarget = node.closest('.notion-block') ?? node;
 
   // ── Click: activate editing (but let link clicks open the URL) ──────────
   node.addEventListener('click', (e) => {
-    // When not editing, a click on a link should navigate, not start editing
     if (node.contentEditable !== 'true') {
       const anchor = e.target.closest('a[href]');
       if (anchor) {
@@ -66,7 +79,7 @@ function createTextBlock(block) {
     originalText = node.textContent;
     escaped = false;
     node.contentEditable = 'true';
-    node.classList.add('is-editing');
+    editingTarget.classList.add('is-editing');
     setEditingNode(node);
     node.focus();
     const sel = window.getSelection();
@@ -78,123 +91,156 @@ function createTextBlock(block) {
 
   // ── Blur: save and deactivate ────────────────────────────────────────────
   node.addEventListener('blur', (e) => {
-    // Focus moved into the formatting toolbar (e.g. link input) — stay in editing mode
     if (isInsideToolbar(e.relatedTarget)) return;
     if (node.contentEditable !== 'true') return;
     node.contentEditable = 'false';
-    node.classList.remove('is-editing');
+    editingTarget.classList.remove('is-editing');
     clearEditingNode();
 
     if (escaped) { escaped = false; return; }
 
-    // Handle pasted "# Title" heading promotion form
-    const raw = node.textContent;
-    const headingMatch = raw.match(/^(#{1,3})\s+(\S.*)?$/);
-    if (headingMatch) {
-      const newLevel = headingMatch[1].length;
-      const newText = (headingMatch[2] ?? '').trimEnd();
-      node.textContent = newText;
-      node.dataset.level = String(newLevel);
-      const patch = {};
-      if (newLevel !== currentLevel) patch.level = newLevel;
-      if (newText !== originalText) patch.text = newText;
-      patch.formatted_text = '';
-      currentLevel = newLevel;
-      originalText = newText;
-      originalHtml = node.innerHTML;
-      apiPatchBlock(block.id, patch).catch(console.error);
-      return;
+    if (enableHeading) {
+      const raw = node.textContent;
+      const headingMatch = raw.match(/^(#{1,3})\s+(\S.*)?$/);
+      if (headingMatch) {
+        const newLevel = headingMatch[1].length;
+        const newText = (headingMatch[2] ?? '').trimEnd();
+        node.textContent = newText;
+        node.dataset.level = String(newLevel);
+        const patch = {};
+        if (newLevel !== currentLevel) patch[levelField] = newLevel;
+        if (newText !== originalText) patch[textField] = newText;
+        patch[htmlField] = '';
+        currentLevel = newLevel;
+        originalText = newText;
+        originalHtml = node.innerHTML;
+        apiPatchBlock(blockId, patch).catch(console.error);
+        return;
+      }
     }
 
-    // Normal save: patch both text and formatted_text when changed
     const newText = node.textContent.trim();
     const newHtml = sanitizeHtml(node.innerHTML);
     const patch = {};
-    if (newText !== originalText) patch.text = newText;
-    if (newHtml !== sanitizeHtml(originalHtml)) patch.formatted_text = newHtml;
+    if (newText !== originalText) patch[textField] = newText;
+    if (newHtml !== sanitizeHtml(originalHtml)) patch[htmlField] = newHtml;
     if (Object.keys(patch).length) {
       originalText = newText;
       originalHtml = node.innerHTML;
-      apiPatchBlock(block.id, patch).catch(console.error);
+      apiPatchBlock(blockId, patch).catch(console.error);
     }
   });
 
   // ── Keydown: formatting shortcuts + heading promotion + slash command ────
   // Capture phase: intercepts Enter/Space for heading promotion before bubble handlers
   node.addEventListener('keydown', (e) => {
-    // Slash command: open palette when '/' is typed in an empty block
-    if (e.key === '/' && node.contentEditable === 'true' && !node.textContent.trim()) {
+    if (enableSlash && e.key === '/' && node.contentEditable === 'true' && !node.textContent.trim()) {
       e.preventDefault();
       node.blur();
-      openBlockPalette(node, null, null, callbacks.addBlock);
+      const slashParentId = node.closest('.block-wrapper')?.dataset.parentBlockId || null;
+      openBlockPalette(node, slashParentId, null, callbacks.addBlock);
       return;
     }
 
     if (node.contentEditable !== 'true') return;
 
-    // Escape: cancel editing and restore original content
     if (e.key === 'Escape') {
       e.preventDefault();
       escaped = true;
       node.innerHTML = originalHtml;
       node.contentEditable = 'false';
-      node.classList.remove('is-editing');
+      editingTarget.classList.remove('is-editing');
       clearEditingNode();
       return;
     }
 
-    // Enter (no shift): either new block or heading promotion
     if (e.key === 'Enter' && !e.shiftKey) {
+      if (enableHeading) {
+        const raw = node.textContent;
+        const exactPrefix = raw.match(/^(#{1,3})$/);
+        if (exactPrefix) {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          const newLevel = exactPrefix[1].length;
+          node.textContent = '';
+          node.dataset.level = String(newLevel);
+          const patch = { [levelField]: newLevel, [textField]: '', [htmlField]: '' };
+          currentLevel = newLevel;
+          originalText = '';
+          originalHtml = '';
+          apiPatchBlock(blockId, patch).catch(console.error);
+          return;
+        }
+      }
+      e.preventDefault();
+      if (onEnter) {
+        onEnter();
+      } else {
+        node.blur();
+        const parentBlockId = node.closest('.block-wrapper')?.dataset.parentBlockId || null;
+        if (callbacks.addBlockAfter) {
+          callbacks.addBlockAfter('text', blockId, parentBlockId).catch(console.error);
+        }
+      }
+      return;
+    }
+
+    if (e.key === ' ') {
       const raw = node.textContent;
-      const exactPrefix = raw.match(/^(#{1,3})$/);
-      if (exactPrefix) {
-        // Heading promotion
+
+      // '> ' → convert block to toggle
+      if (enableTypeShortcuts && raw === '>') {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        node.contentEditable = 'false';
+        node.classList.remove('is-editing');
+        clearEditingNode();
+        apiChangeBlockType(blockId, 'toggle')
+          .then(() => callbacks.reloadDocument?.())
+          .catch(console.error);
+        return;
+      }
+
+      // '# ' / '## ' / '### ' → heading promotion
+      if (enableHeading) {
+        const exactPrefix = raw.match(/^(#{1,3})$/);
+        if (!exactPrefix) return;
         e.preventDefault();
         e.stopImmediatePropagation();
         const newLevel = exactPrefix[1].length;
         node.textContent = '';
         node.dataset.level = String(newLevel);
-        const patch = { level: newLevel, text: '', formatted_text: '' };
+        const patch = { [levelField]: newLevel, [textField]: '', [htmlField]: '' };
         currentLevel = newLevel;
         originalText = '';
         originalHtml = '';
-        apiPatchBlock(block.id, patch).catch(console.error);
-        return;
+        apiPatchBlock(blockId, patch).catch(console.error);
       }
-      e.preventDefault();
-      node.blur();
-      const parentBlockId =
-        node.closest('.block-wrapper')?.dataset.parentBlockId || null;
-      if (callbacks.addBlockAfter) {
-        callbacks.addBlockAfter('text', block.id, parentBlockId).catch(console.error);
-      }
-      return;
     }
 
-    // Space: heading promotion when content is exactly #, ##, or ###
-    if (e.key === ' ') {
-      const raw = node.textContent;
-      const exactPrefix = raw.match(/^(#{1,3})$/);
-      if (!exactPrefix) return;
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      const newLevel = exactPrefix[1].length;
-      node.textContent = '';
-      node.dataset.level = String(newLevel);
-      const patch = { level: newLevel, text: '', formatted_text: '' };
-      currentLevel = newLevel;
-      originalText = '';
-      originalHtml = '';
-      apiPatchBlock(block.id, patch).catch(console.error);
-    }
-
-    // Formatting keyboard shortcuts (Ctrl/Cmd + B / I / U)
     if (e.ctrlKey || e.metaKey) {
       if (e.key === 'b') { e.preventDefault(); document.execCommand('bold', false); }
       else if (e.key === 'i') { e.preventDefault(); document.execCommand('italic', false); }
       else if (e.key === 'u') { e.preventDefault(); document.execCommand('underline', false); }
     }
   }, { capture: true });
+}
+
+// ── Individual block creators ─────────────────────────────────────────────────
+
+function createTextBlock(block) {
+  const template = document.getElementById('text-block-template');
+  const node = template.content.firstElementChild.cloneNode(true);
+
+  if (block.formatted_text) {
+    node.innerHTML = sanitizeHtml(block.formatted_text);
+  } else {
+    node.textContent = block.text;
+  }
+
+  if (block.level) node.dataset.level = String(block.level);
+
+  makeTextEditable(node, block.id);
 
   return node;
 }
@@ -282,24 +328,245 @@ function createImageBlock(block) {
   return node;
 }
 
-function createContainerBlock(block) {
-  const template = document.getElementById('container-block-template');
+function createToggleBlock(block) {
+  const template = document.getElementById('toggle-block-template');
   const node = template.content.firstElementChild.cloneNode(true);
-  const titleNode = node.querySelector('.container-title');
-  const childrenRoot = node.querySelector('.container-children');
+  const arrowBtn = node.querySelector('.toggle-arrow-btn');
+  const titleEl = node.querySelector('.toggle-title');
+  const childrenRoot = node.querySelector('.toggle-children');
 
-  if (block.title) {
-    titleNode.textContent = block.title;
-    enableContentEditable(titleNode, block.id, 'title', node);
+  let isOpen = !!block.is_open;
+
+  function applyOpen(open) {
+    isOpen = open;
+    childrenRoot.hidden = !open;
+    arrowBtn.setAttribute('aria-expanded', String(open));
+    arrowBtn.classList.toggle('is-open', open);
+  }
+
+  applyOpen(isOpen);
+
+  // Render: identical to text block (formatted_text / text / level)
+  if (block.formatted_text) {
+    titleEl.innerHTML = sanitizeHtml(block.formatted_text);
   } else {
-    titleNode.remove();
+    titleEl.textContent = block.text || '';
   }
+  if (block.level) titleEl.dataset.level = String(block.level);
 
-  if (block.layout === 'grid') {
-    childrenRoot.classList.add('is-grid');
-  }
+  // ── Arrow button: only way to open/close ────────────────────────────────
+  arrowBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    applyOpen(!isOpen);
+    apiPatchBlock(block.id, { is_open: isOpen }).catch(console.error);
+  });
+
+  // ── Title editing: identical interface to text block ─────────────────────
+  makeTextEditable(titleEl, block.id, {
+    enableSlash: false,
+    enableTypeShortcuts: false,
+    onEnter: () => {
+      titleEl.blur();
+      // Open toggle if closed, then focus first child block
+      if (!isOpen) {
+        applyOpen(true);
+        apiPatchBlock(block.id, { is_open: true }).catch(console.error);
+      }
+      const firstChild = childrenRoot.querySelector(':scope > .block-wrapper');
+      if (firstChild) focusBlock(firstChild);
+    },
+  });
 
   block.children.forEach((child) => {
+    childrenRoot.appendChild(renderBlock(child, block.id));
+  });
+
+  return node;
+}
+
+const CODE_LANGUAGES = [
+  'plain', 'javascript', 'typescript', 'python', 'bash', 'html', 'css',
+  'json', 'sql', 'java', 'go', 'rust', 'c', 'cpp',
+];
+
+// ── Caret offset helpers for contenteditable (plain-text character index) ────
+
+function getCaretOffset(el) {
+  const sel = window.getSelection();
+  if (!sel || !sel.rangeCount) return 0;
+  const range = sel.getRangeAt(0).cloneRange();
+  range.selectNodeContents(el);
+  range.setEnd(sel.getRangeAt(0).endContainer, sel.getRangeAt(0).endOffset);
+  return range.toString().length;
+}
+
+function setCaretOffset(el, offset) {
+  const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+  let remaining = offset;
+  let node;
+  while ((node = walker.nextNode())) {
+    if (remaining <= node.textContent.length) {
+      const range = document.createRange();
+      range.setStart(node, remaining);
+      range.collapse(true);
+      const sel = window.getSelection();
+      sel?.removeAllRanges();
+      sel?.addRange(range);
+      return;
+    }
+    remaining -= node.textContent.length;
+  }
+  // Fallback: place cursor at end
+  const range = document.createRange();
+  range.selectNodeContents(el);
+  range.collapse(false);
+  window.getSelection()?.removeAllRanges();
+  window.getSelection()?.addRange(range);
+}
+
+function createCodeBlock(block) {
+  const template = document.getElementById('code-block-template');
+  const node = template.content.firstElementChild.cloneNode(true);
+  const select = node.querySelector('.code-language-select');
+  const codeEl = node.querySelector('.code-content');
+  const copyBtn = node.querySelector('.code-copy-btn');
+
+  let currentLanguage = block.language || 'plain';
+  let plainCode = block.code || '';
+  let originalCode = plainCode;
+
+  CODE_LANGUAGES.forEach((lang) => {
+    const opt = document.createElement('option');
+    opt.value = lang;
+    opt.textContent = lang;
+    if (lang === currentLanguage) opt.selected = true;
+    select.appendChild(opt);
+  });
+
+  // ── Syntax highlighting ──────────────────────────────────────────────────
+  function applyHighlight(code) {
+    if (!window.hljs || currentLanguage === 'plain') {
+      codeEl.textContent = code;
+      return;
+    }
+    try {
+      const result = window.hljs.highlight(code, {
+        language: currentLanguage,
+        ignoreIllegals: true,
+      });
+      codeEl.innerHTML = result.value;
+    } catch {
+      codeEl.textContent = code;
+    }
+  }
+
+  applyHighlight(plainCode);
+
+  // ── IME 조합 상태 추적 (한국어 등 조합형 입력 중 innerHTML 교체 방지) ────────
+  let isComposing = false;
+  codeEl.addEventListener('compositionstart', () => { isComposing = true; });
+  codeEl.addEventListener('compositionend', () => {
+    isComposing = false;
+    // 조합 완료 후 한 번 하이라이팅 적용
+    const offset = getCaretOffset(codeEl);
+    plainCode = codeEl.textContent;
+    applyHighlight(plainCode);
+    setCaretOffset(codeEl, offset);
+  });
+
+  // ── Click → activate editing ─────────────────────────────────────────────
+  codeEl.addEventListener('click', () => {
+    if (codeEl.contentEditable === 'true') return;
+    codeEl.contentEditable = 'true';
+    node.classList.add('is-editing');
+    codeEl.focus();
+    // Place cursor at end
+    const range = document.createRange();
+    range.selectNodeContents(codeEl);
+    range.collapse(false);
+    window.getSelection()?.removeAllRanges();
+    window.getSelection()?.addRange(range);
+  });
+
+  // ── Input → live highlight with cursor preservation ──────────────────────
+  codeEl.addEventListener('input', () => {
+    if (isComposing) {
+      // 조합 중에는 plainCode만 갱신하고 innerHTML 교체는 compositionend에서 수행
+      plainCode = codeEl.textContent;
+      return;
+    }
+    const offset = getCaretOffset(codeEl);
+    plainCode = codeEl.textContent;
+    applyHighlight(plainCode);
+    setCaretOffset(codeEl, offset);
+  });
+
+  // ── Blur → save ──────────────────────────────────────────────────────────
+  codeEl.addEventListener('blur', () => {
+    if (codeEl.contentEditable !== 'true') return;
+    codeEl.contentEditable = 'false';
+    node.classList.remove('is-editing');
+    if (plainCode !== originalCode) {
+      originalCode = plainCode;
+      apiPatchBlock(block.id, { code: plainCode }).catch(console.error);
+    }
+  });
+
+  codeEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      document.execCommand('insertText', false, '  ');
+    }
+    if (e.key === 'Escape') codeEl.blur();
+  });
+
+  // ── Language change → re-highlight ──────────────────────────────────────
+  select.addEventListener('change', () => {
+    currentLanguage = select.value;
+    apiPatchBlock(block.id, { language: currentLanguage }).catch(console.error);
+    applyHighlight(plainCode);
+  });
+
+  copyBtn.addEventListener('click', () => {
+    navigator.clipboard.writeText(plainCode).then(() => {
+      copyBtn.textContent = '복사됨';
+      setTimeout(() => { copyBtn.textContent = '복사'; }, 1500);
+    }).catch(console.error);
+  });
+
+  return node;
+}
+
+function createQuoteBlock(block) {
+  const template = document.getElementById('quote-block-template');
+  const node = template.content.firstElementChild.cloneNode(true);
+  const textEl = node.querySelector('.quote-text');
+  const childrenRoot = node.querySelector('.quote-children');
+
+  textEl.textContent = block.text || '';
+  enableContentEditable(textEl, block.id, 'text', node);
+
+  block.children.forEach((child) => {
+    childrenRoot.appendChild(renderBlock(child, block.id));
+  });
+
+
+  return node;
+}
+
+function createCalloutBlock(block) {
+  const template = document.getElementById('callout-block-template');
+  const node = template.content.firstElementChild.cloneNode(true);
+  const emojiEl = node.querySelector('.callout-emoji');
+  const textEl = node.querySelector('.callout-text');
+  const childrenRoot = node.querySelector('.callout-children');
+
+  node.dataset.color = block.color || 'yellow';
+  emojiEl.textContent = block.emoji || '💡';
+  textEl.textContent = block.text || '';
+  enableContentEditable(textEl, block.id, 'text', node);
+
+  (block.children || []).forEach((child) => {
     childrenRoot.appendChild(renderBlock(child, block.id));
   });
 
@@ -474,8 +741,17 @@ export function renderBlock(block, parentBlockId = null) {
     case 'image':
       blockEl = createImageBlock(block);
       break;
-    case 'container':
-      blockEl = createContainerBlock(block);
+    case 'toggle':
+      blockEl = createToggleBlock(block);
+      break;
+    case 'quote':
+      blockEl = createQuoteBlock(block);
+      break;
+    case 'code':
+      blockEl = createCodeBlock(block);
+      break;
+    case 'callout':
+      blockEl = createCalloutBlock(block);
       break;
     case 'divider':
       blockEl = createDividerBlock();
@@ -504,7 +780,7 @@ export function focusBlock(wrapperEl) {
   if (!blockEl) return;
   const target = blockEl.classList.contains('notion-text')
     ? blockEl
-    : (blockEl.querySelector('.notion-caption, .container-title') ?? blockEl);
+    : (blockEl.querySelector('.notion-caption, .toggle-title, .quote-text, .code-content, .callout-text') ?? blockEl);
   target.click();
 }
 

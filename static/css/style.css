@@ -452,31 +452,6 @@ body.sidebar-collapsed .sidebar-tab-chevron {
   padding: 0.66rem 0.74rem;
 }
 
-.notion-container {
-  border: none;
-  border-left: 2px solid var(--line);
-  border-radius: 0;
-  background: transparent;
-  padding: 0.4rem 0 0.4rem 1rem;
-}
-
-.container-title {
-  margin: 0 0 0.7rem;
-  font-size: 0.95rem;
-  letter-spacing: 0.02em;
-  color: #745f3c;
-  font-weight: 700;
-}
-
-.container-children {
-  display: grid;
-  gap: 0.34rem;
-  padding-left: 48px;
-}
-
-.container-children.is-grid {
-  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-}
 
 .notion-page {
   display: flex;
@@ -519,23 +494,26 @@ body.sidebar-collapsed .sidebar-tab-chevron {
   color: #6f3f37;
 }
 
-/* ── Heading via TextBlock (data-level) ──────────────────────────────────── */
+/* ── Heading via TextBlock / toggle title (data-level) ───────────────────── */
 
-.notion-text[data-level="1"] {
+.notion-text[data-level="1"],
+.toggle-title[data-level="1"] {
   font-family: "Fraunces", serif;
   font-size: 1.75rem;
   font-weight: 700;
   color: var(--ink);
 }
 
-.notion-text[data-level="2"] {
+.notion-text[data-level="2"],
+.toggle-title[data-level="2"] {
   font-family: "Fraunces", serif;
   font-size: 1.3rem;
   font-weight: 700;
   color: var(--ink);
 }
 
-.notion-text[data-level="3"] {
+.notion-text[data-level="3"],
+.toggle-title[data-level="3"] {
   font-size: 1.05rem;
   font-weight: 600;
   color: var(--ink-soft);
@@ -549,6 +527,215 @@ body.sidebar-collapsed .sidebar-tab-chevron {
   margin: 0.25rem 0;
 }
 
+/* ── Toggle block ───────────────────────────────────────────────────────── */
+
+.notion-toggle {
+  padding: 0;
+  margin: 0;
+}
+
+.toggle-header {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.32rem 0.4rem;
+  border-radius: 4px;
+}
+
+.toggle-arrow-btn {
+  flex-shrink: 0;
+  width: 1.2rem;
+  height: 1.2rem;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 0.6rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: transform 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.toggle-arrow-btn.is-open {
+  transform: rotate(90deg);
+}
+
+.toggle-title {
+  flex: 1;
+  margin: 0;
+  font-weight: 500;
+  color: var(--ink);
+  line-height: 1.5;
+  outline: none;
+  cursor: text;
+  min-height: calc(1.6em + 0.64rem);
+  display: flex;
+  align-items: center;
+}
+
+.toggle-children {
+  padding-left: 1.4rem;
+  padding-top: 0.25rem;
+}
+
+/* ── Quote block ─────────────────────────────────────────────────────────── */
+
+.notion-quote {
+  border: none;
+  border-left: 3px solid var(--accent);
+  margin: 0;
+  padding: 0.4rem 0 0.4rem 1rem;
+  background: transparent;
+}
+
+.quote-text {
+  margin: 0;
+  color: var(--ink);
+  line-height: 1.6;
+  font-style: italic;
+  outline: none;
+}
+
+.quote-children {
+  margin-top: 0.25rem;
+}
+
+/* ── Code block ──────────────────────────────────────────────────────────── */
+
+.notion-code {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--surface, #f8f8f8);
+}
+
+.code-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.3rem 0.6rem;
+  background: rgba(0, 0, 0, 0.04);
+  border-bottom: 1px solid var(--line);
+  gap: 0.5rem;
+}
+
+.code-language-select {
+  font-size: 0.75rem;
+  border: none;
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+  outline: none;
+  padding: 0.1rem 0.2rem;
+}
+
+.code-copy-btn {
+  font-size: 0.72rem;
+  padding: 0.15rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+
+.code-body {
+  margin: 0;
+  padding: 0;
+  overflow-x: auto;
+  background: #282c34; /* atom-one-dark background */
+  border-radius: 0 0 6px 6px;
+}
+
+/* Override hljs default padding so our pre controls it */
+.code-body .hljs {
+  background: transparent;
+  padding: 0.75rem 1rem;
+}
+
+.code-content {
+  display: block;
+  font-family: "SFMono-Regular", "Consolas", "Liberation Mono", monospace;
+  font-size: 0.875rem;
+  line-height: 1.6;
+  white-space: pre;
+  outline: none;
+  min-height: 1.4em;
+  padding: 0.75rem 1rem;
+  color: #abb2bf; /* atom-one-dark default text */
+  cursor: text;
+}
+
+.code-content[contenteditable="true"] {
+  caret-color: #abb2bf;
+}
+
+.notion-code .code-header {
+  background: #21252b; /* slightly darker header */
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.code-language-select,
+.code-copy-btn {
+  color: #9da5b4;
+}
+
+.code-copy-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #abb2bf;
+}
+
+/* ── Callout block ───────────────────────────────────────────────────────── */
+
+.notion-callout {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  border: 1px solid transparent;
+}
+
+.notion-callout[data-color="yellow"] { background: #fef9c3; border-color: #fde047; }
+.notion-callout[data-color="blue"]   { background: #dbeafe; border-color: #93c5fd; }
+.notion-callout[data-color="green"]  { background: #dcfce7; border-color: #86efac; }
+.notion-callout[data-color="red"]    { background: #fee2e2; border-color: #fca5a5; }
+.notion-callout[data-color="gray"]   { background: #f3f4f6; border-color: #d1d5db; }
+
+.callout-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.callout-emoji {
+  font-size: 1.1rem;
+  line-height: 1.6;
+  flex-shrink: 0;
+}
+
+.callout-text {
+  margin: 0;
+  line-height: 1.6;
+  color: var(--ink);
+  outline: none;
+}
+
+/* Hover hint for new editable targets */
+.toggle-title:not([contenteditable="true"]):hover,
+.quote-text:not([contenteditable="true"]):hover,
+.callout-text:not([contenteditable="true"]):hover {
+  cursor: text;
+  background: rgba(0, 0, 0, 0.03);
+  border-radius: 4px;
+}
+
 /* ── Inline editing ──────────────────────────────────────────────────────── */
 
 .notion-block.is-editing {
@@ -557,9 +744,8 @@ body.sidebar-collapsed .sidebar-tab-chevron {
   border-radius: 6px;
 }
 
-/* Hover hint: text and container title indicate they're editable */
-.notion-text:not([contenteditable="true"]):hover,
-.container-title:not([contenteditable="true"]):hover {
+/* Hover hint: editable text blocks */
+.notion-text:not([contenteditable="true"]):hover {
   cursor: text;
   background: rgba(0, 0, 0, 0.03);
   border-radius: 4px;
@@ -790,6 +976,13 @@ body.sidebar-collapsed .sidebar-tab-chevron {
 .block-wrapper:hover > .block-actions,
 .block-wrapper:focus-within > .block-actions {
   opacity: 1;
+}
+
+/* Hide parent actions while a child block is hovered or focused */
+.block-wrapper:has(.block-wrapper:hover) > .block-actions,
+.block-wrapper:has(.block-wrapper:focus-within) > .block-actions {
+  opacity: 0;
+  pointer-events: none;
 }
 
 .block-drag-handle,

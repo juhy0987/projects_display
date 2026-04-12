@@ -12,13 +12,23 @@ class BlockBase(BaseModel):
   type: str
 
 
+class ContainerBlockBase(BlockBase):
+  """Internal base for blocks that can contain child blocks.
+
+  Not a user-visible block type — not included in the Block discriminated union.
+  Blocks that accept child blocks (toggle, quote, callout) inherit from this base.
+  """
+
+  children: list["Block"] = Field(default_factory=list)
+
+
 class TextBlock(BlockBase):
   """Plain text paragraph, optionally promoted to a heading via level."""
 
   type: Literal["text"]
   text: str
   level: Literal[1, 2, 3] | None = None
-  formatted_text: str | None = None  # HTML string with inline formatting
+  formatted_text: str | None = None
 
 
 class ImageBlock(BlockBase):
@@ -29,13 +39,38 @@ class ImageBlock(BlockBase):
   caption: str = ""
 
 
-class ContainerBlock(BlockBase):
-  """Container block that groups other blocks."""
+class ToggleBlock(ContainerBlockBase):
+  """Collapsible block with a title and nested child blocks."""
 
-  type: Literal["container"]
-  title: str = ""
-  layout: Literal["vertical", "grid"] = "vertical"
-  children: list["Block"] = Field(default_factory=list)
+  type: Literal["toggle"]
+  text: str = ""
+  formatted_text: str | None = None
+  level: Literal[1, 2, 3] | None = None
+  is_open: bool = False
+
+
+class QuoteBlock(ContainerBlockBase):
+  """Blockquote with optional nested child blocks."""
+
+  type: Literal["quote"]
+  text: str = ""
+
+
+class CodeBlock(BlockBase):
+  """Code block with language selection and a copy action."""
+
+  type: Literal["code"]
+  code: str = ""
+  language: str = "plain"
+
+
+class CalloutBlock(ContainerBlockBase):
+  """Highlighted callout box with an emoji icon and background colour."""
+
+  type: Literal["callout"]
+  text: str = ""
+  emoji: str = "💡"
+  color: Literal["yellow", "blue", "green", "red", "gray"] = "yellow"
 
 
 class DividerBlock(BlockBase):
@@ -53,7 +88,7 @@ class PageBlock(BlockBase):
 
 
 Block = Annotated[
-  TextBlock | ImageBlock | ContainerBlock | DividerBlock | PageBlock,
+  TextBlock | ImageBlock | ToggleBlock | QuoteBlock | CodeBlock | CalloutBlock | DividerBlock | PageBlock,
   Field(discriminator="type"),
 ]
 
