@@ -187,9 +187,10 @@ class TestFetchUrlMetadata:
   """
 
   def _make_mock_response(self, html: str, content_type: str = "text/html; charset=utf-8"):
-    """urllib.request.urlopen 응답을 흉내 내는 컨텍스트 매니저 Mock."""
+    """build_opener().open() 응답을 흉내 내는 컨텍스트 매니저 Mock."""
     mock_resp = MagicMock()
     mock_resp.headers.get.return_value = content_type
+    mock_resp.headers.get_content_charset.return_value = "utf-8"
     mock_resp.read.return_value = html.encode("utf-8")
     mock_resp.__enter__ = lambda s: s
     mock_resp.__exit__ = MagicMock(return_value=False)
@@ -199,9 +200,11 @@ class TestFetchUrlMetadata:
     from app.services.url_embed import fetch_url_metadata
 
     mock_resp = self._make_mock_response(html, content_type)
+    mock_opener = MagicMock()
+    mock_opener.open.return_value = mock_resp
     with (
       patch("app.services.url_embed._is_ssrf_safe", return_value=True),
-      patch("app.services.url_embed.urllib.request.urlopen", return_value=mock_resp),
+      patch("app.services.url_embed.urllib.request.build_opener", return_value=mock_opener),
     ):
       return fetch_url_metadata(url)
 
@@ -257,12 +260,11 @@ class TestFetchUrlMetadata:
     import urllib.error
     from app.services.url_embed import fetch_url_metadata
 
+    mock_opener = MagicMock()
+    mock_opener.open.side_effect = urllib.error.HTTPError(None, 404, "Not Found", {}, None)
     with (
       patch("app.services.url_embed._is_ssrf_safe", return_value=True),
-      patch(
-        "app.services.url_embed.urllib.request.urlopen",
-        side_effect=urllib.error.HTTPError(None, 404, "Not Found", {}, None),
-      ),
+      patch("app.services.url_embed.urllib.request.build_opener", return_value=mock_opener),
     ):
       meta = fetch_url_metadata("https://example.com/missing")
     assert meta.status == "error"
@@ -272,12 +274,11 @@ class TestFetchUrlMetadata:
     import urllib.error
     from app.services.url_embed import fetch_url_metadata
 
+    mock_opener = MagicMock()
+    mock_opener.open.side_effect = urllib.error.URLError("connection refused")
     with (
       patch("app.services.url_embed._is_ssrf_safe", return_value=True),
-      patch(
-        "app.services.url_embed.urllib.request.urlopen",
-        side_effect=urllib.error.URLError("connection refused"),
-      ),
+      patch("app.services.url_embed.urllib.request.build_opener", return_value=mock_opener),
     ):
       meta = fetch_url_metadata("https://unreachable.example.com")
     assert meta.status == "error"
@@ -285,12 +286,11 @@ class TestFetchUrlMetadata:
   def test_timeout_returns_error(self):
     from app.services.url_embed import fetch_url_metadata
 
+    mock_opener = MagicMock()
+    mock_opener.open.side_effect = TimeoutError()
     with (
       patch("app.services.url_embed._is_ssrf_safe", return_value=True),
-      patch(
-        "app.services.url_embed.urllib.request.urlopen",
-        side_effect=TimeoutError(),
-      ),
+      patch("app.services.url_embed.urllib.request.build_opener", return_value=mock_opener),
     ):
       meta = fetch_url_metadata("https://slow.example.com")
     assert meta.status == "error"

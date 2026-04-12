@@ -119,7 +119,6 @@ class _MetaParser(HTMLParser):
     self._page_title: str = ""
     self._favicon: str = ""
     self._apple_icon: str = ""
-    self._og_image: str = ""
     self._in_title: bool = False
     self._in_head: bool = True   # </head> 이후 파싱 생략
     self._title_buf: list[str] = []
@@ -229,6 +228,33 @@ def _extract_provider(url: str) -> str:
   return hostname
 
 
+# ── SSRF-안전 리다이렉트 핸들러 ───────────────────────────────────────────────
+
+class _SSRFRedirectHandler(urllib.request.HTTPRedirectHandler):
+  """리다이렉트 목적지 URL을 추적할 때마다 SSRF 검사를 재실행한다.
+
+  urllib의 기본 HTTPRedirectHandler는 Location 헤더를 아무 검사 없이 따라간다.
+  서버가 초기 SSRF 검사를 통과한 뒤 내부 주소로 리다이렉트를 유도하는
+  "open redirect via 30x" 공격을 방지하기 위해 각 목적지를 재검증한다.
+
+  Ref: OWASP SSRF Prevention Cheat Sheet — Redirect Handling
+       https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html
+  """
+
+  def redirect_request(
+    self,
+    req: urllib.request.Request,
+    fp: object,
+    code: int,
+    msg: str,
+    headers: object,
+    newurl: str,
+  ) -> urllib.request.Request | None:
+    if not _is_ssrf_safe(newurl):
+      raise urllib.error.URLError(f"리다이렉트 목적지가 허용되지 않는 주소입니다: {newurl}")
+    return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
 # ── 공개 API ─────────────────────────────────────────────────────────────────
 
 def fetch_url_metadata(url: str) -> UrlEmbedMetadata:
@@ -275,8 +301,9 @@ def fetch_url_metadata(url: str) -> UrlEmbedMetadata:
     },
   )
 
+  opener = urllib.request.build_opener(_SSRFRedirectHandler())
   try:
-    with urllib.request.urlopen(req, timeout=_FETCH_TIMEOUT) as resp:
+    with opener.open(req, timeout=_FETCH_TIMEOUT) as resp:
       content_type: str = resp.headers.get("Content-Type", "")
       # HTML이 아닌 응답(PDF, 이미지 등)은 파싱 대상이 아님
       if "html" not in content_type.lower():
@@ -287,7 +314,15 @@ def fetch_url_metadata(url: str) -> UrlEmbedMetadata:
           status="error",
           error=f"HTML 응답이 아닙니다 (Content-Type: {content_type}).",
         )
-      body = resp.read(_MAX_BODY_BYTES).decode("utf-8", errors="replace")
+      raw_body = resp.read(_MAX_BODY_BYTES)
+      # Content-Type 헤더의 charset 파라미터를 우선 사용한다.
+      # 예) "text/html; charset=euc-kr" → "euc-kr"
+      # Ref: https://docs.python.org/3/library/http.client.html#http.client.HTTPResponse.headers
+      try:
+        charset = resp.headers.get_content_charset("utf-8") or "utf-8"
+      except LookupError:
+        charset = "utf-8"
+      body = raw_body.decode(charset, errors="replace")
 
   except urllib.error.HTTPError as exc:
     return UrlEmbedMetadata(
