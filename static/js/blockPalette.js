@@ -10,6 +10,7 @@ export const BLOCK_PALETTE_ITEMS = [
   { type: 'code', label: '코드', icon: '⟨⟩' },
   { type: 'callout', label: '콜아웃', icon: '💡' },
   { type: 'divider', label: '구분선', icon: '—' },
+  { type: 'url_embed', label: 'URL 임베드', icon: '🔗' },
   { type: 'page', label: '페이지', icon: '⊔' },
   { type: 'database', label: '데이터베이스', icon: '⊞' },
 ];
