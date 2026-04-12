@@ -14,20 +14,21 @@ export function create(block, { callbacks = {} } = {}) {
   const titleEl = node.querySelector(".page-block-title");
   const iconEl = node.querySelector(".page-block-icon");
 
-  titleEl.textContent = block.title || block.document_id;
-  titleEl.dataset.docId = block.document_id;
-
   if (block.is_broken_ref) {
     node.classList.add("is-broken-ref");
     iconEl.textContent = "⚠";
-    titleEl.textContent = block.title || "삭제된 페이지";
-    node.setAttribute("aria-label", `삭제된 페이지: ${titleEl.textContent}`);
+    titleEl.textContent = "삭제된 페이지";
+    titleEl.dataset.docId = block.document_id;
+    node.setAttribute("aria-label", "삭제된 페이지");
     node.setAttribute("aria-disabled", "true");
-    node.removeAttribute("tabindex");
+    // <button>은 tabindex 제거만으로는 탭 순서에서 빠지지 않으므로 disabled와 tabIndex=-1을 함께 사용
+    node.disabled = true;
+    node.tabIndex = -1;
     return node;
   }
 
-  node.setAttribute("tabindex", "0");
+  titleEl.textContent = block.title || block.document_id;
+  titleEl.dataset.docId = block.document_id;
   node.setAttribute("aria-label", `페이지로 이동: ${titleEl.textContent}`);
 
   function navigate() {
