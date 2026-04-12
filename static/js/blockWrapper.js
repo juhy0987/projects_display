@@ -114,7 +114,12 @@ export function wrapBlock(blockEl, block, parentBlockId = null, { addBlockAfter,
   insertBtn.addEventListener('click', async (e) => {
     e.stopPropagation();
     document.querySelectorAll('.block-more-menu').forEach((m) => (m.hidden = true));
-    if (addBlockAfter) await addBlockAfter('text', block.id, parentBlockId);
+    if (!addBlockAfter) return;
+    try {
+      await addBlockAfter('text', block.id, parentBlockId);
+    } catch (err) {
+      console.error('블록 추가 실패:', err);
+    }
   });
 
   // ── Delete with confirmation ──────────────────────────────────────────────
