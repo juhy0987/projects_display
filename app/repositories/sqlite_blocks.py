@@ -484,6 +484,16 @@ class SQLiteBlockRepository:
           default_content = {"text": "", "emoji": "💡", "color": "yellow"}
         case "divider":
           default_content = {}
+        case "url_embed":
+          default_content = {
+            "url": "",
+            "title": "",
+            "description": "",
+            "logo": "",
+            "provider": "",
+            "fetched_at": "",
+            "status": "pending",
+          }
         case _:
           return None
 
@@ -646,6 +656,16 @@ class SQLiteBlockRepository:
         default_content = {"text": "", "emoji": "💡", "color": "yellow"}
       case "divider":
         default_content = {}
+      case "url_embed":
+        default_content = {
+          "url": "",
+          "title": "",
+          "description": "",
+          "logo": "",
+          "provider": "",
+          "fetched_at": "",
+          "status": "pending",
+        }
       case _:
         return False
 
