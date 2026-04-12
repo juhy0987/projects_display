@@ -61,9 +61,15 @@ export function create(block, { callbacks = {} } = {}) {
   titleInput.className = "db-title-input";
   titleInput.value = block.title || "";
   titleInput.placeholder = "데이터베이스 이름...";
+  let dbTitleOriginal = titleInput.value;
+  titleInput.addEventListener("focus", () => { dbTitleOriginal = titleInput.value; });
   titleInput.addEventListener("blur", async () => {
+    const newTitle = titleInput.value.trim();
+    if (newTitle === dbTitleOriginal) return;
     try {
-      await apiPatchBlock(block.id, { title: titleInput.value.trim() });
+      await apiPatchBlock(block.id, { title: newTitle });
+      dbTitleOriginal = newTitle;
+      if (callbacks.onDbTitleChanged) callbacks.onDbTitleChanged(block.id, newTitle);
     } catch (err) {
       console.error("DB 제목 저장 실패:", err);
     }

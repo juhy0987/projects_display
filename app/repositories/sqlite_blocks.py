@@ -44,32 +44,81 @@ class SQLiteBlockRepository:
     return self._session.get(DocumentRow, document_id) is not None
 
   def list_documents(self) -> list[dict]:
-    """Return all documents as a parent-child tree sorted by title.
+    """Return all documents as a parent-child tree, with database blocks as virtual folder nodes.
 
-    Each root-level document has a ``children`` list; children are sorted
-    alphabetically and may themselves contain further children.
-    Documents that are db_row pages (source_block_id set) are excluded from the
-    sidebar tree — they are accessed by opening the row from within the database block.
+    트리 구조:
+      Document
+        ├── Child Page          (page block 자식 문서)
+        └── [db:block_id]       (is_database=True 가상 노드 — database 블록)
+              └── db_row 문서   (is_db_row=True)
+
+    db_row 문서의 parent_id는 "db:{database_block_id}" 형태로 가상 노드를 가리킨다.
     """
-    rows = self._session.execute(
-      select(DocumentRow)
-      .where(DocumentRow.source_block_id.is_(None))
-      .order_by(DocumentRow.title)
+    doc_rows = self._session.execute(
+      select(DocumentRow).order_by(DocumentRow.title)
     ).scalars().all()
 
-    all_docs: list[dict] = [
-      {"id": r.id, "title": r.title, "subtitle": r.subtitle, "parent_id": r.parent_id, "children": []}
-      for r in rows
-    ]
-    by_id = {d["id"]: d for d in all_docs}
-    roots: list[dict] = []
+    # ── database 블록 조회 ────────────────────────────────────────────────────
+    db_blocks = self._session.execute(
+      select(BlockRow).where(BlockRow.type == "database")
+    ).scalars().all()
 
-    for doc in all_docs:
-      pid = doc["parent_id"]
+    # db_row 블록 조회 (parent = database 블록)
+    db_block_ids = [b.id for b in db_blocks]
+    db_row_block_to_db: dict[str, str] = {}  # db_row_block_id → database_block_id
+    if db_block_ids:
+      row_blocks = self._session.execute(
+        select(BlockRow.id, BlockRow.parent_block_id).where(
+          BlockRow.type == "db_row",
+          BlockRow.parent_block_id.in_(db_block_ids),
+        )
+      ).all()
+      db_row_block_to_db = {rb.id: rb.parent_block_id for rb in row_blocks}
+
+    # source_block_id → database_block_id
+    doc_to_db: dict[str, str] = {}
+    for r in doc_rows:
+      if r.source_block_id and r.source_block_id in db_row_block_to_db:
+        doc_to_db[r.id] = db_row_block_to_db[r.source_block_id]
+
+    # ── 가상 database 노드 생성 ───────────────────────────────────────────────
+    db_virtual: dict[str, dict] = {}
+    for b in db_blocks:
+      content = json.loads(b.content_json)
+      node_id = f"db:{b.id}"
+      db_virtual[node_id] = {
+        "id": node_id,
+        "block_id": b.id,
+        "title": content.get("title") or "데이터베이스",
+        "is_database": True,
+        "parent_id": b.document_id,
+        "parent_doc_id": b.document_id,
+        "children": [],
+      }
+
+    # ── 문서 노드 생성 ─────────────────────────────────────────────────────────
+    all_items: list[dict] = list(db_virtual.values())
+    for r in doc_rows:
+      db_block_id = doc_to_db.get(r.id)
+      parent_ref = f"db:{db_block_id}" if db_block_id else r.parent_id
+      all_items.append({
+        "id": r.id,
+        "title": r.title,
+        "subtitle": r.subtitle,
+        "parent_id": parent_ref,
+        "is_db_row": db_block_id is not None,
+        "children": [],
+      })
+
+    # ── 트리 조립 ─────────────────────────────────────────────────────────────
+    by_id = {item["id"]: item for item in all_items}
+    roots: list[dict] = []
+    for item in all_items:
+      pid = item["parent_id"]
       if pid and pid in by_id:
-        by_id[pid]["children"].append(doc)
-      else:
-        roots.append(doc)
+        by_id[pid]["children"].append(item)
+      elif not item.get("is_db_row") and not item.get("is_database"):
+        roots.append(item)
 
     return roots
 
@@ -402,6 +451,8 @@ class SQLiteBlockRepository:
       self._session.commit()
 
       doc_title = child_doc["title"]
+      child_doc["is_db_row"] = True
+      child_doc["parent_sidebar_id"] = f"db:{parent_block_id}"
       result: dict[str, Any] = {
         "id": block_id,
         "type": "db_row",

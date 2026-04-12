@@ -78,7 +78,11 @@ async function initGallery() {
     const item = list.querySelector(`li[data-id="${docId}"]`);
     if (!item) return;
     const btn = item.querySelector(':scope > .document-row > .document-item');
-    if (btn) btn.textContent = newTitle;
+    if (!btn) return;
+    // db_row 아이템은 아이콘 span + 제목 span 구조이므로 제목 span만 교체
+    const titleSpan = btn.querySelector('span:last-child');
+    if (titleSpan) titleSpan.textContent = newTitle;
+    else btn.textContent = newTitle;
   }
 
   // ── Sidebar helpers ───────────────────────────────────────────────────────
@@ -101,7 +105,8 @@ async function initGallery() {
    * without a full reload. The parent's toggle is expanded automatically.
    */
   function addChildToSidebar(childDoc) {
-    const parentItem = list.querySelector(`li[data-id="${childDoc.parent_id}"]`);
+    const sidebarParentId = childDoc.parent_sidebar_id ?? childDoc.parent_id;
+    const parentItem = list.querySelector(`li[data-id="${sidebarParentId}"]`);
     if (!parentItem) return;
 
     const parentDepth = parseInt(parentItem.dataset.depth ?? '0', 10);
@@ -154,6 +159,10 @@ async function initGallery() {
     document.querySelectorAll(`.db-row[data-doc-id="${documentId}"] .db-row-title`).forEach((el) => {
       el.textContent = newTitle;
     });
+  };
+
+  callbacks.onDbTitleChanged = (dbBlockId, newTitle) => {
+    updateSidebarTitle(`db:${dbBlockId}`, newTitle);
   };
 
   // ── Document loader ───────────────────────────────────────────────────────
