@@ -115,7 +115,7 @@ class DatabaseBlock(BlockBase):
 
   type: Literal["database"]
   title: str = ""
-  schema: list[ColumnSchema] = Field(default_factory=list)
+  columns: list[ColumnSchema] = Field(default_factory=list)
   rows: list[DbRowBlock] = Field(default_factory=list)  # populated at query time
 
 
@@ -141,13 +141,13 @@ Block = Annotated[
 class DbContext(BaseModel):
   """Attached to a BlockDocument when that document is a database row page.
 
-  Provides the schema from the parent DatabaseBlock so the page can render
-  editable property fields below the title.
+  Provides the column schema from the parent DatabaseBlock so the page can
+  render editable property fields below the title.
   """
 
   block_id: str       # the db_row block id
   db_block_id: str    # the parent DatabaseBlock id
-  schema: list[ColumnSchema]
+  columns: list[ColumnSchema]
   properties: dict[str, Any]
 
 

@@ -164,7 +164,7 @@ class SQLiteBlockRepository:
   def _build_database_block(self, item: dict[str, Any]) -> DatabaseBlock:
     """DatabaseBlock을 조립: 자식 db_row 블록들을 rows로 채워 반환."""
     db_block_id = item["id"]
-    schema_raw = item.get("schema", [])
+    schema_raw = item.get("columns", [])
     schema = [ColumnSchema.model_validate(c) for c in schema_raw]
 
     row_blocks = self._session.execute(
@@ -203,7 +203,7 @@ class SQLiteBlockRepository:
 
     return DatabaseBlock.model_validate({
       **item,
-      "schema": schema,
+      "columns": schema,
       "rows": rows,
     })
 
@@ -225,7 +225,7 @@ class SQLiteBlockRepository:
       return None
 
     db_content = json.loads(db_block.content_json)
-    schema = [ColumnSchema.model_validate(c) for c in db_content.get("schema", [])]
+    schema = [ColumnSchema.model_validate(c) for c in db_content.get("columns", [])]
 
     return DbContext(
       block_id=db_row_block_id,
@@ -366,7 +366,7 @@ class SQLiteBlockRepository:
 
     # ── Database block ────────────────────────────────────────────────────────
     elif block_type == "database":
-      default_content = {"title": "", "schema": []}
+      default_content = {"title": "", "columns": []}
 
     # ── db_row block: always creates a child document ─────────────────────────
     elif block_type == "db_row":
@@ -683,26 +683,26 @@ class SQLiteBlockRepository:
     return True
 
   def add_db_column(self, db_block_id: str, column: dict[str, Any]) -> bool:
-    """Append a new column to the database block schema. Returns False if not found."""
+    """Append a new column to the database block. Returns False if not found."""
     block_row = self._session.get(BlockRow, db_block_id)
     if block_row is None or block_row.type != "database":
       return False
     content = json.loads(block_row.content_json)
-    schema: list[dict] = content.get("schema", [])
-    schema.append(column)
-    content["schema"] = schema
+    cols: list[dict] = content.get("columns", [])
+    cols.append(column)
+    content["columns"] = cols
     block_row.content_json = json.dumps(content, ensure_ascii=False)
     self._session.commit()
     return True
 
   def update_db_column(self, db_block_id: str, col_id: str, patch: dict[str, Any]) -> bool:
-    """Update a column's name/type/options in the schema. Returns False if not found."""
+    """Update a column's name/type/options. Returns False if not found."""
     block_row = self._session.get(BlockRow, db_block_id)
     if block_row is None or block_row.type != "database":
       return False
     content = json.loads(block_row.content_json)
-    schema: list[dict] = content.get("schema", [])
-    col = next((c for c in schema if c["id"] == col_id), None)
+    cols: list[dict] = content.get("columns", [])
+    col = next((c for c in cols if c["id"] == col_id), None)
     if col is None:
       return False
     col.update({k: v for k, v in patch.items() if v is not None})
@@ -711,16 +711,16 @@ class SQLiteBlockRepository:
     return True
 
   def remove_db_column(self, db_block_id: str, col_id: str) -> bool:
-    """Remove a column from the database schema (and its values from all rows)."""
+    """Remove a column and wipe its values from all rows."""
     block_row = self._session.get(BlockRow, db_block_id)
     if block_row is None or block_row.type != "database":
       return False
     content = json.loads(block_row.content_json)
-    schema: list[dict] = content.get("schema", [])
-    new_schema = [c for c in schema if c["id"] != col_id]
-    if len(new_schema) == len(schema):
+    cols: list[dict] = content.get("columns", [])
+    new_cols = [c for c in cols if c["id"] != col_id]
+    if len(new_cols) == len(cols):
       return False  # column not found
-    content["schema"] = new_schema
+    content["columns"] = new_cols
     block_row.content_json = json.dumps(content, ensure_ascii=False)
 
     # Remove property values for this column from all db_row children
