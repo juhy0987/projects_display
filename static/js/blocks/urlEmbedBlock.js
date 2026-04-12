@@ -83,11 +83,11 @@ export function create(block, { isNew = false } = {}) {
     errorWrap.hidden  = true;
   }
 
-  /** 에러 메시지만 표시한다. 입력창은 재시도/URL변경 버튼을 통해 연다. */
+  /** 입력창 아래에 에러 메시지를 표시한다. 입력창은 그대로 열려 있다. */
   function showError(msg) {
     errorMsg.textContent  = msg || "메타데이터를 가져올 수 없습니다.";
     errorWrap.hidden      = false;
-    inputWrap.hidden      = true;
+    inputWrap.hidden      = false;
     card.hidden           = true;
     placeholder.hidden    = true;
   }
@@ -156,10 +156,10 @@ export function create(block, { isNew = false } = {}) {
   // placeholder 편집 버튼 → 입력 폼으로 전환
   placeholderEdit.addEventListener("click", () => showInputMode());
 
-  // 에러 상태 재시도 — 저장된 URL로 바로 재요청. URL 없으면 입력창 오픈
+  // 에러 상태 재시도 — 현재 입력창 값을 우선 사용
   retryBtn.addEventListener("click", () => {
-    if (block.url) fetchMeta(block.url);
-    else showInputMode();
+    const url = input.value.trim() || block.url;
+    if (url) fetchMeta(url);
   });
 
   // 로고 로드 실패 시 숨김
