@@ -135,7 +135,7 @@ async function initGallery() {
   };
 
   callbacks.reloadDocument = () => {
-    if (activeDocId) loadDocument(activeDocId, { pushHistory: false });
+    if (activeDocId) loadDocument(activeDocId, { pushHistory: false, resetScroll: false });
   };
 
   callbacks.reloadSidebar = reloadSidebar;
@@ -165,7 +165,7 @@ async function initGallery() {
   };
 
   // ── Document loader ───────────────────────────────────────────────────────
-  async function loadDocument(documentId, { focusBlockId = null, pushHistory = true } = {}) {
+  async function loadDocument(documentId, { focusBlockId = null, pushHistory = true, resetScroll = true } = {}) {
     activeDocId = documentId;
 
     /**
@@ -253,13 +253,13 @@ async function initGallery() {
       const lastBlock = rootBlocks[rootBlocks.length - 1];
       if (!lastBlock || lastBlock.type !== 'text') {
         const newBlock = await apiCreateBlock(activeDocId, 'text');
-        await loadDocument(documentId, { focusBlockId: focusBlockId ?? newBlock.id, pushHistory });
+        await loadDocument(documentId, { focusBlockId: focusBlockId ?? newBlock.id, pushHistory, resetScroll });
         return;
       }
 
       renderDocument(payload);
-      // 페이지 전환 시 본문 최상단에서 시작 (#33)
-      window.scrollTo(0, 0);
+      // 페이지 전환 시 본문 최상단에서 시작 (#33) — 네비게이션 경로에서만 리셋
+      if (resetScroll) window.scrollTo(0, 0);
       if (pushHistory) {
         const state = { docId: documentId };
         history.state?.docId === undefined
@@ -425,7 +425,7 @@ async function initGallery() {
       closeAllMenus(list);
       setActiveItem(list, targetItem);
     }
-    loadDocument(docId, { pushHistory: false });
+    loadDocument(docId, { pushHistory: false, resetScroll: true });
   });
 
   document.addEventListener('click', () => {
