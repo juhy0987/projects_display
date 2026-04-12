@@ -23,8 +23,14 @@ export class BlockRegistry {
    * @param {{ type: string, create: Function }} module
    */
   register(module) {
-    if (!module.type || typeof module.create !== "function") {
-      throw new Error(`블록 모듈은 type 과 create 를 내보내야 합니다: ${JSON.stringify(module)}`);
+    if (typeof module.type !== "string" || !module.type) {
+      throw new Error(`블록 모듈의 type 은 비어 있지 않은 문자열이어야 합니다: ${JSON.stringify(module)}`);
+    }
+    if (typeof module.create !== "function") {
+      throw new Error(`블록 모듈은 create 함수를 내보내야 합니다: ${module.type}`);
+    }
+    if (this._modules.has(module.type)) {
+      throw new Error(`이미 등록된 블록 타입입니다: ${module.type}`);
     }
     this._modules.set(module.type, module);
   }

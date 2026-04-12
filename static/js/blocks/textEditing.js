@@ -177,7 +177,7 @@ export function makeTextEditable(node, blockId, {
         e.preventDefault();
         e.stopImmediatePropagation();
         node.contentEditable = "false";
-        node.classList.remove("is-editing");
+        editingTarget.classList.remove("is-editing");
         clearEditingNode();
         apiChangeBlockType(blockId, "toggle")
           .then(() => reloadDocument?.())
