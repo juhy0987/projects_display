@@ -1,7 +1,7 @@
 // ── Block wrapper (drag handle + more menu) ───────────────────────────────────
 
 import { apiChangeBlockType, apiMoveBlock } from "./api.js";
-import { BLOCK_PALETTE_ITEMS, openBlockPalette, showBlockDeleteConfirm } from "./blockPalette.js";
+import { BLOCK_PALETTE_ITEMS, showBlockDeleteConfirm } from "./blockPalette.js";
 
 // ── Drag state ────────────────────────────────────────────────────────────────
 let currentDragBlockId = null;
@@ -111,12 +111,15 @@ export function wrapBlock(blockEl, block, parentBlockId = null, { addBlockAfter,
   });
 
   // ── Insert below ─────────────────────────────────────────────────────────
-  insertBtn.addEventListener('click', (e) => {
+  insertBtn.addEventListener('click', async (e) => {
     e.stopPropagation();
     document.querySelectorAll('.block-more-menu').forEach((m) => (m.hidden = true));
-    openBlockPalette(wrapper, parentBlockId, async (type) => {
-      if (addBlockAfter) await addBlockAfter(type, block.id, parentBlockId);
-    });
+    if (!addBlockAfter) return;
+    try {
+      await addBlockAfter('text', block.id, parentBlockId);
+    } catch (err) {
+      console.error('블록 추가 실패:', err);
+    }
   });
 
   // ── Delete with confirmation ──────────────────────────────────────────────
