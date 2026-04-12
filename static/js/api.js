@@ -123,3 +123,12 @@ export async function apiUpdateDbRowProperties(dbRowBlockId, properties) {
   });
   if (!res.ok) throw new Error('Failed to update row properties');
 }
+
+export async function apiPatchDatabaseBlock(dbBlockId, fields) {
+  const res = await fetch(`/api/database/blocks/${dbBlockId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(fields),
+  });
+  if (!res.ok) throw new Error('Failed to patch database block');
+}

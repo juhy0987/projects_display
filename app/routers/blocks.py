@@ -24,11 +24,14 @@ class BlockPatch(BaseModel):
   # code
   code: str | None = None
   language: str | None = None
-  # callout
+  # callout (color은 callout 지원 색상만 허용)
   emoji: str | None = None
-  color: Literal["yellow", "blue", "green", "red", "gray", "default", "brown", "orange", "purple", "pink"] | None = None
-  # database
+  color: Literal["yellow", "blue", "green", "red", "gray"] | None = None
+
+
+class DatabaseBlockPatch(BaseModel):
   title: str | None = None
+  color: Literal["default", "gray", "brown", "orange", "yellow", "green", "blue", "purple", "pink", "red"] | None = None
 
 
 class BlockPositionPatch(BaseModel):

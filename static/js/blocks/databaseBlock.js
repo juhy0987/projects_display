@@ -7,9 +7,8 @@ import {
   apiAddDbColumn,
   apiUpdateDbColumn,
   apiRemoveDbColumn,
-  apiCreateBlock,
   apiUpdateDbRowProperties,
-  apiPatchBlock,
+  apiPatchDatabaseBlock,
 } from "../api.js";
 
 export const type = "database";
@@ -67,7 +66,7 @@ export function create(block, { callbacks = {} } = {}) {
     const newTitle = titleInput.value.trim();
     if (newTitle === dbTitleOriginal) return;
     try {
-      await apiPatchBlock(block.id, { title: newTitle });
+      await apiPatchDatabaseBlock(block.id, { title: newTitle });
       dbTitleOriginal = newTitle;
       if (callbacks.onDbTitleChanged) callbacks.onDbTitleChanged(block.id, newTitle);
     } catch (err) {
@@ -109,7 +108,7 @@ export function create(block, { callbacks = {} } = {}) {
       swatch.classList.add("is-active");
       closePalette();
       try {
-        await apiPatchBlock(block.id, { color: c.id });
+        await apiPatchDatabaseBlock(block.id, { color: c.id });
       } catch (err) {
         console.error("색상 저장 실패:", err);
       }

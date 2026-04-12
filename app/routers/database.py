@@ -8,8 +8,26 @@ from pydantic import BaseModel, Field
 
 from app.dependencies import get_repository
 from app.repositories.sqlite_blocks import SQLiteBlockRepository
+from app.routers.blocks import DatabaseBlockPatch
 
 router = APIRouter(prefix="/api/database", tags=["database"])
+
+
+# ── Database block meta patch ─────────────────────────────────────────────────
+
+@router.patch("/blocks/{block_id}")
+def patch_database_block(
+  block_id: str,
+  body: DatabaseBlockPatch,
+  repo: SQLiteBlockRepository = Depends(get_repository),
+) -> dict[str, str]:
+  """Update title or color of a database block."""
+  patch_data = body.model_dump(exclude_unset=True, exclude_none=True)
+  if not patch_data:
+    raise HTTPException(status_code=422, detail="No fields to update")
+  if not repo.update_block(block_id, patch_data):
+    raise HTTPException(status_code=404, detail="Database block not found")
+  return {"id": block_id}
 
 
 # ── Schema management ──────────────────────────────────────────────────────────
