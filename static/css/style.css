@@ -1108,6 +1108,167 @@ body.sidebar-collapsed .sidebar-tab-chevron {
   display: none;
 }
 
+/* ── Image action overlay ────────────────────────────────────────────────── */
+
+/* 이미지를 감싸는 래퍼 — action overlay의 position 기준점 */
+.image-media-wrap {
+  position: relative;
+  line-height: 0; /* img 하단 공백 제거 */
+}
+
+/* 액션 overlay: 기본 숨김, 이미지 hover 시 노출 */
+.image-media-wrap:hover .image-actions,
+.image-media-wrap:focus-within .image-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.image-actions {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s;
+  /* 편집 중에는 부모가 is-editing 클래스를 가지므로 overlay를 숨김 */
+}
+
+.notion-image-wrap.is-editing .image-actions {
+  display: none;
+}
+
+.image-action-btn {
+  padding: 0.28rem 0.6rem;
+  border: none;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.88);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 0.78rem;
+  font-weight: 500;
+  cursor: pointer;
+  backdrop-filter: blur(4px);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
+  white-space: nowrap;
+  transition: background 0.12s;
+}
+
+.image-action-btn:hover,
+.image-action-btn:focus-visible {
+  background: rgba(255, 255, 255, 1);
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* ── 더보기 드롭다운 ─────────────────────────────────────────────────────── */
+
+/* 드롭다운 기준점: 더보기 버튼 기준 상대 위치 */
+.image-more-btn {
+  position: relative;
+}
+
+.image-more-menu {
+  position: absolute;
+  top: calc(100% + 0.3rem);
+  right: 0;
+  z-index: 300;
+  min-width: 130px;
+  margin: 0;
+  padding: 0.3rem 0;
+  list-style: none;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 6px 18px -4px var(--shadow);
+  animation: fade-slide-up 0.14s ease both;
+}
+
+.image-menu-item {
+  display: block;
+  width: 100%;
+  padding: 0.48rem 0.85rem;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 0.84rem;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.image-menu-item:hover,
+.image-menu-item:focus-visible {
+  background: var(--accent-soft);
+  outline: none;
+}
+
+.image-menu-item--danger {
+  color: #c0392b;
+}
+
+.image-menu-item--danger:hover,
+.image-menu-item--danger:focus-visible {
+  background: #fdecea;
+}
+
+/* ── 라이트박스 overlay ──────────────────────────────────────────────────── */
+
+.image-lightbox-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.82);
+  animation: fade-in 0.18s ease both;
+}
+
+/* 라이트박스가 열린 동안 배경 스크롤 잠금 */
+body.lightbox-open {
+  overflow: hidden;
+}
+
+.image-lightbox-img {
+  max-width: min(92vw, 1200px);
+  max-height: 90vh;
+  object-fit: contain;
+  border-radius: 6px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
+  user-select: none;
+}
+
+.image-lightbox-close {
+  position: absolute;
+  top: 1rem;
+  right: 1.2rem;
+  padding: 0.4rem 0.7rem;
+  border: none;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  font-size: 1.1rem;
+  cursor: pointer;
+  line-height: 1;
+  transition: background 0.15s;
+}
+
+.image-lightbox-close:hover,
+.image-lightbox-close:focus-visible {
+  background: rgba(255, 255, 255, 0.3);
+  outline: 2px solid rgba(255, 255, 255, 0.6);
+  outline-offset: 2px;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
 /* ── Block palette ───────────────────────────────────────────────────────── */
 
 .block-palette {
