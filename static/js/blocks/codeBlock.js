@@ -6,7 +6,7 @@ export const type = "code";
 
 const CODE_LANGUAGES = [
   "plain", "javascript", "typescript", "python", "bash", "html", "css",
-  "json", "sql", "java", "go", "rust", "c", "cpp",
+  "json", "sql", "java", "go", "rust", "c", "cpp", "mermaid",
 ];
 
 // ── Caret offset helpers ──────────────────────────────────────────────────────
@@ -44,6 +44,51 @@ function setCaretOffset(el, offset) {
   window.getSelection()?.addRange(range);
 }
 
+// ── Mermaid rendering ─────────────────────────────────────────────────────────
+
+/**
+ * Mermaid.js를 사용해 소스 코드를 SVG로 렌더링한다.
+ * 렌더 성공 시 previewEl에 SVG를 삽입하고, 실패 시 errorEl에 오류 메시지를 표시한다.
+ *
+ * Ref: https://mermaid.js.org/config/usage.html#using-mermaid-render
+ *
+ * @param {string} blockId - 블록 고유 ID (mermaid 렌더 ID 생성에 사용)
+ * @param {string} source  - Mermaid 문법 소스 코드
+ * @param {HTMLElement} previewEl - SVG를 삽입할 컨테이너
+ * @param {HTMLElement} errorEl   - 오류 메시지를 표시할 컨테이너
+ */
+async function renderMermaid(blockId, source, previewEl, errorEl) {
+  if (!window.mermaid) {
+    errorEl.textContent = "Mermaid 라이브러리를 불러오지 못했습니다.";
+    errorEl.hidden = false;
+    previewEl.hidden = true;
+    return;
+  }
+
+  const trimmed = source.trim();
+  if (!trimmed) {
+    previewEl.innerHTML = "";
+    previewEl.hidden = true;
+    errorEl.hidden = true;
+    return;
+  }
+
+  // mermaid.render() 의 id는 DOM에서 고유해야 하며, UUID의 하이픈을 제거해 유효한 HTML id로 변환
+  const renderId = `mermaid-${blockId.replace(/-/g, "")}`;
+  try {
+    const { svg } = await window.mermaid.render(renderId, trimmed);
+    previewEl.innerHTML = svg;
+    previewEl.hidden = false;
+    errorEl.hidden = true;
+  } catch (err) {
+    // mermaid.render()는 문법 오류 시 Error를 throw한다
+    previewEl.innerHTML = "";
+    previewEl.hidden = true;
+    errorEl.textContent = `Mermaid 문법 오류: ${err?.message ?? "알 수 없는 오류"}`;
+    errorEl.hidden = false;
+  }
+}
+
 /**
  * @param {object} block
  * @returns {HTMLElement}
@@ -54,6 +99,8 @@ export function create(block) {
   const select = node.querySelector(".code-language-select");
   const codeEl = node.querySelector(".code-content");
   const copyBtn = node.querySelector(".code-copy-btn");
+  const previewEl = node.querySelector(".mermaid-preview");
+  const errorEl = node.querySelector(".mermaid-error");
 
   let currentLanguage = block.language || "plain";
   let plainCode = block.code || "";
@@ -67,9 +114,23 @@ export function create(block) {
     select.appendChild(opt);
   });
 
+  // ── Mermaid 모드 전환 ─────────────────────────────────────────────────────
+  // isMermaid === true 일 때: 코드 에디터(소스 편집) + 미리보기 패널을 함께 표시한다.
+
+  function applyMermaidMode(isMermaid) {
+    node.classList.toggle("is-mermaid", isMermaid);
+    if (isMermaid) {
+      renderMermaid(block.id, plainCode, previewEl, errorEl);
+    } else {
+      previewEl.hidden = true;
+      errorEl.hidden = true;
+    }
+  }
+
   // ── Syntax highlighting ──────────────────────────────────────────────────
   function applyHighlight(code) {
-    if (!window.hljs || currentLanguage === "plain") {
+    // mermaid 소스는 hljs로 하이라이팅하지 않는다
+    if (!window.hljs || currentLanguage === "plain" || currentLanguage === "mermaid") {
       codeEl.textContent = code;
       return;
     }
@@ -85,6 +146,11 @@ export function create(block) {
   }
 
   applyHighlight(plainCode);
+
+  // 초기 로드 시 mermaid 모드 적용
+  if (currentLanguage === "mermaid") {
+    applyMermaidMode(true);
+  }
 
   // ── IME 조합 상태 추적 ──────────────────────────────────────────────────
   let isComposing = false;
@@ -122,7 +188,7 @@ export function create(block) {
     setCaretOffset(codeEl, offset);
   });
 
-  // ── Blur → save ──────────────────────────────────────────────────────────
+  // ── Blur → save + mermaid re-render ──────────────────────────────────────
   codeEl.addEventListener("blur", () => {
     if (codeEl.contentEditable !== "true") return;
     codeEl.contentEditable = "false";
@@ -130,6 +196,10 @@ export function create(block) {
     if (plainCode !== originalCode) {
       originalCode = plainCode;
       apiPatchBlock(block.id, { code: plainCode }).catch(console.error);
+    }
+    // blur 시점에 mermaid 미리보기를 갱신한다
+    if (currentLanguage === "mermaid") {
+      renderMermaid(block.id, plainCode, previewEl, errorEl);
     }
   });
 
@@ -143,9 +213,16 @@ export function create(block) {
 
   // ── Language change ───────────────────────────────────────────────────────
   select.addEventListener("change", () => {
+    const prev = currentLanguage;
     currentLanguage = select.value;
     apiPatchBlock(block.id, { language: currentLanguage }).catch(console.error);
     applyHighlight(plainCode);
+    // mermaid ↔ 일반 모드 전환
+    if (currentLanguage === "mermaid") {
+      applyMermaidMode(true);
+    } else if (prev === "mermaid") {
+      applyMermaidMode(false);
+    }
   });
 
   copyBtn.addEventListener("click", () => {
