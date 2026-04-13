@@ -44,6 +44,78 @@ function setCaretOffset(el, offset) {
   window.getSelection()?.addRange(range);
 }
 
+// ── Mermaid hljs 언어 정의 ────────────────────────────────────────────────────
+// CDN 추가 없이 highlight.js에 mermaid 언어를 직접 등록한다.
+// Ref: https://highlightjs.readthedocs.io/en/latest/language-guide.html
+
+/**
+ * highlight.js 언어 정의 객체를 반환한다.
+ * @param {object} hljs - highlight.js 전역 객체
+ */
+function _mermaidHljsDefinition(hljs) {
+  return {
+    name: "Mermaid",
+    case_insensitive: false,
+    keywords: {
+      // 다이어그램 선언 키워드 — 첫 줄에 등장하는 다이어그램 타입 식별자
+      built_in:
+        "graph flowchart sequenceDiagram erDiagram classDiagram " +
+        "stateDiagram stateDiagram-v2 gantt pie gitGraph mindmap " +
+        "timeline journey xychart-beta block",
+      // 흐름/구조 제어 키워드
+      keyword:
+        "TD LR RL BT TB direction participant actor autonumber " +
+        "loop alt else opt par and critical break rect note over as " +
+        "end title accTitle accDescr section subgraph click call " +
+        "style linkStyle classDef class",
+    },
+    contains: [
+      // %% 단일 행 주석
+      hljs.COMMENT("%%", "$"),
+      // 큰따옴표 문자열 레이블
+      hljs.QUOTE_STRING_MODE,
+      // 대괄호 노드 레이블: A[label], A[/label/], A[\label\]
+      {
+        className: "string",
+        begin: /\[/,
+        end: /\]/,
+        relevance: 0,
+      },
+      // 소괄호/이중소괄호 노드: B(label), C((label))
+      {
+        className: "string",
+        begin: /\(/,
+        end: /\)/,
+        relevance: 0,
+      },
+      // 중괄호 노드: D{label}
+      {
+        className: "string",
+        begin: /\{/,
+        end: /\}/,
+        relevance: 0,
+      },
+      // 화살표 · ER 관계 커넥터
+      // flowchart: -->, -.->. ==>, ---, --
+      // sequence:  ->>, ->>, -->> , -x, -), <<->>
+      // ER:        ||--o{, }|--|{, |o--||  등
+      {
+        className: "operator",
+        match: /\.{1,2}-{0,2}>?|-{2,3}>?|={2,3}>?|>{1,2}|<{1,2}|[|o*}{]{1,3}-{1,3}[|o*}{]{1,3}/,
+      },
+    ],
+  };
+}
+
+/** hljs.registerLanguage 는 1회만 호출해야 하므로 등록 여부를 추적한다. */
+let _mermaidHljsRegistered = false;
+
+function _ensureMermaidHljs() {
+  if (_mermaidHljsRegistered || !window.hljs) return;
+  window.hljs.registerLanguage("mermaid", _mermaidHljsDefinition);
+  _mermaidHljsRegistered = true;
+}
+
 // ── Mermaid rendering ─────────────────────────────────────────────────────────
 
 /**
@@ -144,11 +216,12 @@ export function create(block) {
 
   // ── Syntax highlighting ──────────────────────────────────────────────────
   function applyHighlight(code) {
-    // mermaid 소스는 hljs로 하이라이팅하지 않는다
-    if (!window.hljs || currentLanguage === "plain" || currentLanguage === "mermaid") {
+    if (!window.hljs || currentLanguage === "plain") {
       codeEl.textContent = code;
       return;
     }
+    // mermaid 언어가 아직 등록되지 않았을 경우 최초 호출 시 등록한다
+    if (currentLanguage === "mermaid") _ensureMermaidHljs();
     try {
       const result = window.hljs.highlight(code, {
         language: currentLanguage,
