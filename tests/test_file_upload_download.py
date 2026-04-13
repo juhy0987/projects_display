@@ -179,7 +179,7 @@ class TestSaveFile:
     from app.services import file as svc
     monkeypatch.setattr(svc, "FILES_DIR", tmp_path / "files")
 
-    result = svc.save_file(b"data", "test.txt", "text/plain")
+    result = svc.save_file(b"data", "test.txt")
     assert "stored_filename" in result
 
   def test_stored_filename_is_uuid_hex(self, tmp_path, monkeypatch):
@@ -187,7 +187,7 @@ class TestSaveFile:
     from app.services import file as svc
     monkeypatch.setattr(svc, "FILES_DIR", tmp_path / "files")
 
-    result = svc.save_file(b"data", "test.txt", "text/plain")
+    result = svc.save_file(b"data", "test.txt")
     assert len(result["stored_filename"]) == 32
 
   def test_file_exists_after_save(self, tmp_path, monkeypatch):
@@ -196,7 +196,7 @@ class TestSaveFile:
     files_dir = tmp_path / "files"
     monkeypatch.setattr(svc, "FILES_DIR", files_dir)
 
-    result = svc.save_file(b"hello", "test.txt", "text/plain")
+    result = svc.save_file(b"hello", "test.txt")
     assert (files_dir / result["stored_filename"]).exists()
 
   def test_size_bytes_matches_data(self, tmp_path, monkeypatch):
@@ -205,7 +205,7 @@ class TestSaveFile:
     monkeypatch.setattr(svc, "FILES_DIR", tmp_path / "files")
 
     data = b"0" * 1234
-    result = svc.save_file(data, "test.txt", "text/plain")
+    result = svc.save_file(data, "test.txt")
     assert result["size_bytes"] == 1234
 
   def test_sanitized_filename_returned(self, tmp_path, monkeypatch):
@@ -213,7 +213,7 @@ class TestSaveFile:
     from app.services import file as svc
     monkeypatch.setattr(svc, "FILES_DIR", tmp_path / "files")
 
-    result = svc.save_file(b"data", "../../evil.txt", "text/plain")
+    result = svc.save_file(b"data", "../../evil.txt")
     assert "/" not in result["sanitized_filename"]
 
   def test_unique_stored_filename_per_call(self, tmp_path, monkeypatch):
@@ -221,9 +221,18 @@ class TestSaveFile:
     from app.services import file as svc
     monkeypatch.setattr(svc, "FILES_DIR", tmp_path / "files")
 
-    r1 = svc.save_file(b"a", "a.txt", "text/plain")
-    r2 = svc.save_file(b"b", "b.txt", "text/plain")
+    r1 = svc.save_file(b"a", "a.txt")
+    r2 = svc.save_file(b"b", "b.txt")
     assert r1["stored_filename"] != r2["stored_filename"]
+
+  def test_exceeding_max_bytes_raises(self, tmp_path, monkeypatch):
+    """MAX_BYTES를 초과하는 데이터는 ValueError를 발생시킨다."""
+    from app.services import file as svc
+    monkeypatch.setattr(svc, "FILES_DIR", tmp_path / "files")
+    monkeypatch.setattr(svc, "MAX_BYTES", 10)  # 10 bytes로 제한
+
+    with pytest.raises(ValueError, match="초과"):
+      svc.save_file(b"x" * 11, "big.txt")
 
 
 class TestGetFilePath:

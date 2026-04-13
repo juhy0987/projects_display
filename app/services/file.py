@@ -85,7 +85,7 @@ def validate_extension(filename: str) -> str:
   return ext
 
 
-def save_file(data: bytes, original_filename: str, mime_type: str) -> dict[str, str | int]:
+def save_file(data: bytes, original_filename: str) -> dict[str, str | int]:
   """파일을 UUID 기반 이름으로 디스크에 저장하고 메타데이터를 반환합니다.
 
   저장 경로에는 UUID만 사용하므로 파일명 충돌과 경로 순회 위험이 없습니다.
@@ -94,11 +94,18 @@ def save_file(data: bytes, original_filename: str, mime_type: str) -> dict[str, 
   Args:
     data: 저장할 파일 바이트.
     original_filename: 클라이언트가 전송한 원본 파일명.
-    mime_type: 클라이언트가 전달한 MIME type (Content-Type).
 
   Returns:
     stored_filename, size_bytes, sanitized_filename 을 담은 dict.
+
+  Raises:
+    ValueError: 파일 크기가 MAX_BYTES를 초과하는 경우.
   """
+  # 서비스 레이어에서 크기 제한을 강제하여 라우터 외부 호출 경로에서도 안전성 보장
+  # Ref: OWASP File Upload Cheat Sheet — "Limit the file size"
+  if len(data) > MAX_BYTES:
+    raise ValueError(f"파일 크기가 {MAX_BYTES // (1024 * 1024)} MB를 초과합니다.")
+
   FILES_DIR.mkdir(parents=True, exist_ok=True)
 
   stored_filename = uuid.uuid4().hex

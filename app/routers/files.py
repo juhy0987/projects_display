@@ -106,7 +106,7 @@ async def upload_file(
   data = b"".join(chunks)
 
   # 디스크 저장 (UUID 기반 파일명, 원본명은 sanitize)
-  result = save_file(data, original_name, file.content_type or "application/octet-stream")
+  result = save_file(data, original_name)
 
   # 메타데이터를 DB에 저장
   row = repo.create_file(
