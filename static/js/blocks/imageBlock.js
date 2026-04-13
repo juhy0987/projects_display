@@ -86,6 +86,13 @@ export function create(block, { callbacks } = {}) {
 
   // ── 더보기 드롭다운 ──────────────────────────────────────────────────────
 
+  // 외부 클릭 핸들러 — toggleMenu(true) 때만 등록, false 때 해제
+  // 블록당 하나의 named 함수를 재사용해 addEventListener/removeEventListener가
+  // 동일 참조로 짝을 맞출 수 있도록 한다.
+  const handleOutsideClick = (e) => {
+    if (!node.contains(e.target)) toggleMenu(false);
+  };
+
   /** 드롭다운 열기/닫기 */
   function toggleMenu(open) {
     moreMenu.hidden = !open;
@@ -94,6 +101,11 @@ export function create(block, { callbacks } = {}) {
       // 첫 번째 메뉴 항목에 포커스
       const first = moreMenu.querySelector("[role='menuitem']");
       first?.focus();
+      // 열릴 때만 외부 클릭 감지 시작
+      document.addEventListener("click", handleOutsideClick, { capture: true });
+    } else {
+      // 닫힐 때 리스너 즉시 해제 → 블록이 많아도 클릭당 1회만 실행
+      document.removeEventListener("click", handleOutsideClick, { capture: true });
     }
   }
 
@@ -123,15 +135,6 @@ export function create(block, { callbacks } = {}) {
       moreBtn.focus();
     }
   });
-
-  // 외부 클릭 시 드롭다운 닫기 (캡처 단계에서 처리하여 다른 블록과 충돌 방지)
-  document.addEventListener(
-    "click",
-    (e) => {
-      if (!node.contains(e.target)) toggleMenu(false);
-    },
-    { capture: true },
-  );
 
   // 드롭다운 메뉴 액션 처리
   moreMenu.addEventListener("click", async (e) => {
