@@ -10,6 +10,17 @@
   <link rel="stylesheet" href="/static/css/style.css" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.10.0/styles/atom-one-dark.min.css" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.10.0/highlight.min.js"></script>
+  <!-- Mermaid.js: 클라이언트 사이드 다이어그램 렌더링 (Ref: https://mermaid.js.org/config/usage.html) -->
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <script>
+    // startOnLoad: false — 자동 렌더링 비활성화, 코드 블록에서 명시적으로 호출
+    // securityLevel: "sandbox" — XSS 방지를 위해 sandboxed iframe 사용
+    document.addEventListener("DOMContentLoaded", () => {
+      if (window.mermaid) {
+        window.mermaid.initialize({ startOnLoad: false, securityLevel: "sandbox" });
+      }
+    });
+  </script>
   {% block head %}{% endblock %}
 </head>
 <body>
