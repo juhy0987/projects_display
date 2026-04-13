@@ -82,8 +82,30 @@
     </div>
     <pre class="code-body"><code class="code-content" spellcheck="false"></code></pre>
     <!-- Mermaid 전용 패널: language=mermaid 일 때만 표시 -->
-    <div class="mermaid-preview" hidden aria-label="Mermaid 다이어그램 미리보기"></div>
-    <div class="mermaid-error" hidden role="alert" aria-live="polite"></div>
+    <div class="mermaid-panel" hidden>
+      <!-- 미리보기 래퍼: 액션 overlay의 position 기준점 -->
+      <div class="mermaid-media-wrap" hidden>
+        <div class="mermaid-preview" aria-label="Mermaid 다이어그램 미리보기"></div>
+        <!-- 렌더 성공 시 프리뷰 우상단에 표시되는 액션 버튼 -->
+        <div class="mermaid-actions" aria-label="다이어그램 액션" hidden>
+          <button
+            type="button"
+            class="image-action-btn mermaid-view-btn"
+            aria-label="크게 보기"
+          >크게 보기</button>
+          <button
+            type="button"
+            class="image-action-btn mermaid-download-btn"
+            aria-label="다운로드"
+          >다운로드</button>
+        </div>
+      </div>
+      <!-- 렌더 실패 시 표시: 오류 메시지 + 재시도 버튼 -->
+      <div class="mermaid-error" role="alert" aria-live="polite" hidden>
+        <span class="mermaid-error-msg"></span>
+        <button type="button" class="mermaid-retry-btn">재시도</button>
+      </div>
+    </div>
   </div>
 </template>
 
