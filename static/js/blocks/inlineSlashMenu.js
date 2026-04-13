@@ -30,6 +30,7 @@ export const SLASH_MENU_ITEMS = [
   { type: "code",      label: "코드",        icon: "⟨⟩",  keywords: ["code", "snippet", "pre", "코드"] },
   { type: "callout",   label: "콜아웃",      icon: "💡",  keywords: ["callout", "note", "tip", "콜아웃"] },
   { type: "image",     label: "이미지",      icon: "▣",   keywords: ["image", "photo", "picture", "이미지"] },
+  { type: "file",      label: "파일",        icon: "📎",  keywords: ["file", "attach", "upload", "파일", "첨부"] },
   { type: "divider",   label: "구분선",      icon: "—",   keywords: ["divider", "separator", "hr", "rule", "구분선"] },
   { type: "url_embed", label: "URL 임베드", icon: "🔗",   keywords: ["url", "link", "embed", "bookmark", "임베드"] },
 ];
