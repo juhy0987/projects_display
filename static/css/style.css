@@ -2563,3 +2563,208 @@ body.lightbox-open {
   color: var(--text-muted, #999);
   text-align: center;
 }
+
+/* ── File Block ─────────────────────────────────────────────────────────────── */
+
+.notion-file {
+  width: 100%;
+}
+
+/* hidden 속성이 display: flex 등에 의해 덮어쓰이지 않도록 명시 */
+.file-empty-state[hidden],
+.file-upload-spinner[hidden],
+.file-uploaded-state[hidden],
+.file-upload-error[hidden] {
+  display: none;
+}
+
+/* ── 빈 상태(드롭존) ─────────────────────────────────────────────────────────── */
+
+.file-drop-zone {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.75rem 1rem;
+  border: 1.5px dashed var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--ink-soft);
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  /* 텍스트 블록과 줄 높이 통일 */
+  min-height: 2.4rem;
+}
+
+.file-drop-zone:hover,
+.file-drop-zone:focus-visible {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--ink);
+  outline: none;
+}
+
+.file-drop-zone.is-drag-over {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  border-style: solid;
+}
+
+.file-drop-icon {
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.file-drop-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 실제 <input type=file>는 숨기되 JS로 트리거 */
+.file-input {
+  position: absolute;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* 에러 메시지 */
+.file-upload-error {
+  margin-top: 0.35rem;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.8rem;
+  color: #c0392b;
+  background: #fdf0ee;
+  border-radius: 4px;
+  border-left: 3px solid #c0392b;
+}
+
+/* ── 업로드 중 스피너 ─────────────────────────────────────────────────────────── */
+
+.file-upload-spinner {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
+  color: var(--ink-soft);
+  border: 1.5px dashed var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  min-height: 2.4rem;
+}
+
+/* 도트 애니메이션 */
+.file-spinner-dot {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--line);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: file-spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes file-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── 업로드 완료 카드 ────────────────────────────────────────────────────────── */
+
+.file-card {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.65rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.file-card:hover {
+  border-color: var(--accent);
+  box-shadow: 0 1px 4px var(--shadow);
+}
+
+.file-icon {
+  font-size: 1.3rem;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.file-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.file-name {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-meta {
+  font-size: 0.75rem;
+  color: var(--ink-soft);
+}
+
+/* 다운로드 버튼 */
+.file-download-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.3rem 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  text-decoration: none;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: background 0.12s, color 0.12s;
+}
+
+.file-download-btn:hover,
+.file-download-btn:focus-visible {
+  background: var(--accent);
+  color: #fff;
+  outline: none;
+}
+
+/* 파일 제거 버튼 */
+.file-remove-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  font-size: 0.75rem;
+  color: var(--ink-soft);
+  background: none;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.12s, color 0.12s;
+}
+
+.file-remove-btn:hover,
+.file-remove-btn:focus-visible {
+  background: #fee2e2;
+  color: #c0392b;
+  outline: none;
+}

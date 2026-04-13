@@ -142,6 +142,40 @@
   </div>
 </template>
 
+<template id="file-block-template">
+  <div class="notion-block notion-file">
+    <!-- 빈 상태: 드래그&드롭 / 클릭 업로드 유도 -->
+    <div class="file-empty-state">
+      <div class="file-drop-zone" role="button" tabindex="0" aria-label="파일 업로드. 클릭하거나 파일을 드래그하세요.">
+        <span class="file-drop-icon" aria-hidden="true">📎</span>
+        <span class="file-drop-label">파일을 드래그하거나 클릭해서 업로드</span>
+        <!-- type="file" input은 JS가 트리거 — 직접 클릭 금지(tabindex=-1) -->
+        <input type="file" class="file-input" tabindex="-1" aria-hidden="true">
+      </div>
+      <div class="file-upload-error" role="alert" hidden></div>
+    </div>
+    <!-- 업로드 중 -->
+    <div class="file-upload-spinner" hidden aria-live="polite" aria-label="업로드 중">
+      <span class="file-spinner-dot" aria-hidden="true"></span>
+      <span>업로드 중...</span>
+    </div>
+    <!-- 업로드 완료 상태: 파일 카드 -->
+    <div class="file-uploaded-state" hidden>
+      <div class="file-card">
+        <span class="file-icon" aria-hidden="true">📎</span>
+        <div class="file-info">
+          <span class="file-name"></span>
+          <span class="file-meta"></span>
+        </div>
+        <a class="file-download-btn" href="#" download aria-label="파일 다운로드">
+          <span aria-hidden="true">↓</span> 다운로드
+        </a>
+        <button type="button" class="file-remove-btn" aria-label="파일 제거">✕</button>
+      </div>
+    </div>
+  </div>
+</template>
+
 <template id="callout-block-template">
   <div class="notion-block notion-callout">
     <span class="callout-emoji"></span>

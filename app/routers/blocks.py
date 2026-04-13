@@ -27,6 +27,8 @@ class BlockPatch(BaseModel):
   # callout (color은 callout 지원 색상만 허용)
   emoji: str | None = None
   color: Literal["yellow", "blue", "green", "red", "gray"] | None = None
+  # file
+  file_id: str | None = None
 
 
 class DatabaseBlockPatch(BaseModel):
@@ -39,7 +41,7 @@ class BlockPositionPatch(BaseModel):
 
 
 class BlockTypeChange(BaseModel):
-  type: Literal["text", "image", "toggle", "quote", "code", "callout", "divider", "url_embed"]
+  type: Literal["text", "image", "file", "toggle", "quote", "code", "callout", "divider", "url_embed"]
 
 
 @router.patch("/{block_id}")

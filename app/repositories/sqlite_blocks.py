@@ -17,11 +17,12 @@ from app.models.blocks import (
   DbContext,
   DbRowBlock,
   DividerBlock,
+  FileBlock,
   PageBlock,
   QuoteBlock,
   ToggleBlock,
 )
-from app.models.orm import BlockRow, DocumentRow
+from app.models.orm import BlockRow, DocumentRow, FileRow
 
 
 # Block types that act as containers: auto-create one child text block on creation
@@ -155,6 +156,27 @@ class SQLiteBlockRepository:
       ).all()
       doc_titles = {row.id: row.title for row in title_rows}
 
+    # file 블록 메타데이터 일괄 조회 — query-time 주입으로 FileBlock 필드를 채운다
+    file_ids = list({
+      item["file_id"]
+      for item in parsed_blocks
+      if item["type"] == "file" and item.get("file_id")
+    })
+    file_meta: dict[str, dict[str, Any]] = {}
+    if file_ids:
+      file_rows = self._session.execute(
+        select(FileRow).where(FileRow.id.in_(file_ids))
+      ).scalars().all()
+      file_meta = {
+        r.id: {
+          "original_filename": r.original_filename,
+          "size_bytes": r.size_bytes,
+          "mime_type": r.mime_type,
+          "download_url": f"/api/files/{r.id}",
+        }
+        for r in file_rows
+      }
+
     children_by_parent: dict[str | None, list[dict[str, Any]]] = {}
     for item in parsed_blocks:
       children_by_parent.setdefault(item["parent_block_id"], []).append(item)
@@ -193,6 +215,11 @@ class SQLiteBlockRepository:
           # db_row는 database 블록 내부에서만 등장 (build_database_block 처리)
           # 최상위에 고아로 있는 경우 무시
           pass
+        elif item["type"] == "file":
+          # file_id가 있는 경우 FileRow에서 조회한 메타데이터를 병합한다
+          fid = item.get("file_id", "")
+          meta = file_meta.get(fid, {}) if fid else {}
+          nodes.append(FileBlock.model_validate({**item, **meta}))
         else:
           nodes.append(self._block_adapter.validate_python(item))
       return nodes
@@ -494,6 +521,8 @@ class SQLiteBlockRepository:
             "fetched_at": "",
             "status": "pending",
           }
+        case "file":
+          default_content = {"file_id": ""}
         case _:
           return None
 
@@ -666,6 +695,8 @@ class SQLiteBlockRepository:
           "fetched_at": "",
           "status": "pending",
         }
+      case "file":
+        default_content = {"file_id": ""}
       case _:
         return False
 

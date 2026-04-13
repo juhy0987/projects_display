@@ -67,6 +67,23 @@ export async function apiChangeBlockType(blockId, type) {
   if (!res.ok) throw new Error('Failed to change block type');
 }
 
+export async function apiUploadFile(file) {
+  const form = new FormData();
+  form.append('file', file);
+  const res = await fetch('/api/files', { method: 'POST', body: form });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail ?? '파일 업로드에 실패했습니다.');
+  }
+  return res.json();
+}
+
+export async function apiDeleteFile(fileId) {
+  // 이미 없는 파일(404)은 정상으로 처리 — 멱등성 보장
+  const res = await fetch(`/api/files/${fileId}`, { method: 'DELETE' });
+  if (!res.ok && res.status !== 404) throw new Error('파일 삭제에 실패했습니다.');
+}
+
 export async function apiUploadImage(file) {
   const form = new FormData();
   form.append('file', file);

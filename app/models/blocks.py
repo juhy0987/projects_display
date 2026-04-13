@@ -98,6 +98,21 @@ class UrlEmbedBlock(BlockBase):
   status: Literal["pending", "success", "error"] = "pending"
 
 
+class FileBlock(BlockBase):
+  """첨부 파일 블록 — 업로드된 파일을 문서에 첨부합니다.
+
+  file_id는 files 테이블의 FileRow.id를 참조합니다.
+  original_filename·size_bytes·mime_type은 조회 시점에 FileRow에서 채워집니다.
+  """
+
+  type: Literal["file"]
+  file_id: str = ""            # files 테이블의 row id
+  original_filename: str = ""  # 표시용 파일명 (query-time 채움)
+  size_bytes: int = 0          # 파일 크기 bytes (query-time 채움)
+  mime_type: str = ""          # MIME type (query-time 채움)
+  download_url: str = ""       # /api/files/{file_id} (query-time 채움)
+
+
 class PageBlock(BlockBase):
   """Block that links to another BlockDocument, enabling recursive page nesting."""
 
@@ -144,6 +159,7 @@ class DatabaseBlock(BlockBase):
 Block = Annotated[
   TextBlock
   | ImageBlock
+  | FileBlock
   | ToggleBlock
   | QuoteBlock
   | CodeBlock
