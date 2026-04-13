@@ -217,6 +217,9 @@ export function create(block, { callbacks } = {}) {
  * @param {string} alt
  */
 function openLightbox(src, alt) {
+  // 닫힌 후 포커스를 복원할 트리거 요소를 미리 저장 (WCAG 2.4.3)
+  const previousFocus = document.activeElement;
+
   const overlay = document.createElement("div");
   overlay.className = "image-lightbox-overlay";
   overlay.setAttribute("role", "dialog");
@@ -238,17 +241,51 @@ function openLightbox(src, alt) {
   document.body.append(overlay);
   document.body.classList.add("lightbox-open");
 
-  // 포커스를 닫기 버튼으로 이동 (접근성)
+  // 열릴 때 포커스를 닫기 버튼으로 이동
   closeBtn.focus();
 
   function close() {
     overlay.remove();
     document.body.classList.remove("lightbox-open");
     document.removeEventListener("keydown", onKeyDown);
+    // 닫힌 후 트리거 요소로 포커스 복원 (WCAG 2.4.3 Focus Order)
+    previousFocus?.focus();
   }
 
+  // 포커스 트랩 — overlay 내 포커스 가능 요소 목록을 Tab/Shift+Tab으로 순환
+  // (ARIA Authoring Practices Guide — Modal Dialog Pattern)
   function onKeyDown(e) {
-    if (e.key === "Escape") close();
+    if (e.key === "Escape") {
+      close();
+      return;
+    }
+
+    if (e.key === "Tab") {
+      const focusable = [
+        ...overlay.querySelectorAll(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+        ),
+      ].filter((el) => !el.disabled);
+
+      if (focusable.length === 0) { e.preventDefault(); return; }
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+
+      if (e.shiftKey) {
+        // Shift+Tab: 첫 요소에서 뒤로 가면 마지막 요소로 순환
+        if (document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else {
+        // Tab: 마지막 요소에서 앞으로 가면 첫 요소로 순환
+        if (document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    }
   }
 
   closeBtn.addEventListener("click", close);
