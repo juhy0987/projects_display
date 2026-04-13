@@ -120,31 +120,51 @@ function _ensureMermaidHljs() {
 
 /**
  * Mermaid.js를 사용해 소스 코드를 SVG로 렌더링한다.
- * 렌더 성공 시 previewEl에 SVG를 삽입하고, 실패 시 errorEl에 오류 메시지를 표시한다.
+ *
+ * 렌더 결과에 따라 DOM을 갱신한다.
+ * - 성공: previewEl 에 SVG 삽입, mediaWrapEl 표시, actionsEl 활성화
+ * - 빈 입력: previewEl 초기화, mediaWrapEl 및 오류 숨김
+ * - 실패: opreviewEl 초기화, errorMsgEl 에 오류 메시지 표시
  *
  * Ref: https://mermaid.js.org/config/usage.html#using-mermaid-render
  *
- * @param {string} blockId - 블록 고유 ID (mermaid 렌더 ID 생성에 사용)
- * @param {string} source  - Mermaid 문법 소스 코드
- * @param {HTMLElement} previewEl - SVG를 삽입할 컨테이너
- * @param {HTMLElement} errorEl   - 오류 메시지를 표시할 컨테이너
- * @param {function(): boolean} isCancelled - true를 반환하면 DOM 갱신을 건너뛴다.
+ * @param {string} blockId       - 블록 고유 ID (mermaid 렌더 ID 생성에 사용)
+ * @param {string} source        - Mermaid 문법 소스 코드
+ * @param {object} opts
+ * @param {HTMLElement} opts.previewEl    - SVG를 삽입할 컨테이너
+ * @param {HTMLElement} opts.errorEl      - 오류 영역 전체 컨테이너
+ * @param {HTMLElement} opts.errorMsgEl   - 오류 메시지 텍스트 span
+ * @param {HTMLElement} opts.mediaWrapEl  - 미리보기 래퍼 (hidden 관리)
+ * @param {HTMLElement} opts.actionsEl    - 액션 버튼 overlay (hidden 관리)
+ * @param {function(): boolean} opts.isCancelled
+ *   true를 반환하면 DOM 갱신을 건너뛴다.
  *   blur → language change 순서로 이벤트가 발생할 때, blur 핸들러에서 시작된
  *   async 렌더가 language change 이후에 완료되며 previewEl을 다시 노출시키는
  *   경쟁 조건을 방지한다.
  */
-async function renderMermaid(blockId, source, previewEl, errorEl, isCancelled = () => false) {
+async function renderMermaid(blockId, source, opts = {}) {
+  const {
+    previewEl,
+    errorEl,
+    errorMsgEl,
+    mediaWrapEl,
+    actionsEl,
+    isCancelled = () => false,
+  } = opts;
+
   if (!window.mermaid) {
-    errorEl.textContent = "Mermaid 라이브러리를 불러오지 못했습니다.";
+    errorMsgEl.textContent = "Mermaid 라이브러리를 불러오지 못했습니다.";
     errorEl.hidden = false;
-    previewEl.hidden = true;
+    mediaWrapEl.hidden = true;
+    actionsEl.hidden = true;
     return;
   }
 
   const trimmed = source.trim();
   if (!trimmed) {
     previewEl.innerHTML = "";
-    previewEl.hidden = true;
+    mediaWrapEl.hidden = true;
+    actionsEl.hidden = true;
     errorEl.hidden = true;
     return;
   }
@@ -173,18 +193,171 @@ async function renderMermaid(blockId, source, previewEl, errorEl, isCancelled = 
       svgEl.style.maxWidth = "";
     }
 
-    previewEl.hidden = false;
+    mediaWrapEl.hidden = false;
+    actionsEl.hidden = false; // CSS hover가 opacity 제어 — hidden 해제로 상호작용 허용
     errorEl.hidden = true;
   } catch (err) {
     if (isCancelled()) return;
     // mermaid.render()는 문법 오류 시 Error 객체 또는 문자열을 throw할 수 있다.
     // err?.message || err 순서로 평가해 두 경우를 모두 커버한다.
     previewEl.innerHTML = "";
-    previewEl.hidden = true;
-    errorEl.textContent = "Mermaid 문법 오류: " + (err?.message || err || "알 수 없는 오류");
+    mediaWrapEl.hidden = true;
+    actionsEl.hidden = true;
+    errorMsgEl.textContent = "Mermaid 문법 오류: " + (err?.message || err || "알 수 없는 오류");
     errorEl.hidden = false;
   }
 }
+
+// ── Mermaid 크게 보기 (라이트박스) ───────────────────────────────────────────
+
+/**
+ * 현재 렌더된 SVG를 전체화면 오버레이에서 표시한다.
+ *
+ * 이미지 블록의 openLightbox 와 동일한 접근성 패턴을 따른다.
+ *   - role="dialog" + aria-modal="true" 로 스크린리더에 모달임을 알림
+ *   - 열릴 때 닫기 버튼으로 포커스 이동 (WCAG 2.4.3)
+ *   - ESC 키 및 배경 클릭으로 닫기
+ *   - 포커스 트랩 (ARIA Authoring Practices Guide — Modal Dialog Pattern)
+ *   - 닫힐 때 트리거 요소로 포커스 복원
+ *
+ * Ref: https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/
+ *
+ * @param {HTMLElement} previewEl - 미리보기 컨테이너 (SVG 포함)
+ */
+function openMermaidLightbox(previewEl) {
+  const svgEl = previewEl.querySelector("svg");
+  if (!svgEl) return; // 렌더된 SVG가 없으면 라이트박스를 열지 않는다.
+
+  // 닫힌 후 포커스를 복원할 트리거 요소를 미리 저장 (WCAG 2.4.3)
+  const previousFocus = document.activeElement;
+
+  // 이미지 라이트박스와 동일한 overlay/close 스타일 재사용
+  const overlay = document.createElement("div");
+  overlay.className = "image-lightbox-overlay";
+  overlay.setAttribute("role", "dialog");
+  overlay.setAttribute("aria-modal", "true");
+  overlay.setAttribute("aria-label", "다이어그램 크게 보기");
+
+  const closeBtn = document.createElement("button");
+  closeBtn.type = "button";
+  closeBtn.className = "image-lightbox-close";
+  closeBtn.setAttribute("aria-label", "닫기");
+  closeBtn.textContent = "✕";
+
+  // SVG를 복제해 라이트박스 내 독립적인 뷰어에 삽입
+  const svgWrap = document.createElement("div");
+  svgWrap.className = "mermaid-lightbox-svg";
+  const svgClone = svgEl.cloneNode(true);
+  // 라이트박스에서도 Mermaid 고정 크기 속성 제거
+  svgClone.removeAttribute("width");
+  svgClone.removeAttribute("height");
+  svgClone.style.maxWidth = "";
+  svgWrap.appendChild(svgClone);
+
+  overlay.append(closeBtn, svgWrap);
+  document.body.append(overlay);
+  document.body.classList.add("lightbox-open");
+
+  // 열릴 때 포커스를 닫기 버튼으로 이동
+  closeBtn.focus();
+
+  function close() {
+    overlay.remove();
+    document.body.classList.remove("lightbox-open");
+    document.removeEventListener("keydown", onKeyDown);
+    // 닫힌 후 트리거 요소로 포커스 복원 (WCAG 2.4.3 Focus Order)
+    previousFocus?.focus();
+  }
+
+  // 포커스 트랩 — overlay 내 포커스 가능 요소 목록을 Tab/Shift+Tab으로 순환
+  // (ARIA Authoring Practices Guide — Modal Dialog Pattern)
+  function onKeyDown(e) {
+    if (e.key === "Escape") {
+      close();
+      return;
+    }
+
+    if (e.key === "Tab") {
+      const focusable = [
+        ...overlay.querySelectorAll(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+        ),
+      ].filter((el) => !el.disabled);
+
+      if (focusable.length === 0) { e.preventDefault(); return; }
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+
+      if (e.shiftKey) {
+        if (document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else {
+        if (document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    }
+  }
+
+  closeBtn.addEventListener("click", close);
+  // 오버레이 배경(SVG 외부) 클릭 시 닫기
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) close();
+  });
+  document.addEventListener("keydown", onKeyDown);
+}
+
+// ── Mermaid SVG 다운로드 ──────────────────────────────────────────────────────
+
+/**
+ * 현재 렌더된 SVG를 .svg 파일로 다운로드한다.
+ *
+ * 파일명: mermaid-diagram-<타임스탬프>.svg
+ * 다운로드 실패 시 버튼 텍스트로 오류 안내를 제공한 뒤 원래 상태로 복원한다.
+ *
+ * Ref:
+ *   - XMLSerializer: https://developer.mozilla.org/en-US/docs/Web/API/XMLSerializer
+ *   - URL.createObjectURL: https://developer.mozilla.org/en-US/docs/Web/API/URL/createObjectURL
+ *
+ * @param {HTMLElement} previewEl   - 미리보기 컨테이너 (SVG 포함)
+ * @param {HTMLButtonElement} downloadBtn - 다운로드 버튼 (피드백 표시용)
+ */
+function downloadMermaidSvg(previewEl, downloadBtn) {
+  const svgEl = previewEl.querySelector("svg");
+  if (!svgEl) return;
+
+  try {
+    // SVG 직렬화 시 xmlns 선언이 누락되면 일부 뷰어에서 렌더링 불가.
+    // cloneNode 후 속성을 추가해 원본 DOM에 영향을 주지 않는다.
+    const svgCopy = svgEl.cloneNode(true);
+    if (!svgCopy.getAttribute("xmlns")) {
+      svgCopy.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+    }
+    const svgStr = new XMLSerializer().serializeToString(svgCopy);
+    const blob = new Blob([svgStr], { type: "image/svg+xml" });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `mermaid-diagram-${Date.now()}.svg`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  } catch (err) {
+    console.error("SVG 다운로드 실패:", err);
+    // 다운로드 실패 시 버튼 텍스트로 사용자에게 안내
+    const original = downloadBtn.textContent;
+    downloadBtn.textContent = "다운로드 실패";
+    setTimeout(() => { downloadBtn.textContent = original; }, 2000);
+  }
+}
+
+// ── Block create ─────────────────────────────────────────────────────────────
 
 /**
  * @param {object} block
@@ -193,11 +366,21 @@ async function renderMermaid(blockId, source, previewEl, errorEl, isCancelled = 
 export function create(block) {
   const template = document.getElementById("code-block-template");
   const node = template.content.firstElementChild.cloneNode(true);
+
   const select = node.querySelector(".code-language-select");
   const codeEl = node.querySelector(".code-content");
   const copyBtn = node.querySelector(".code-copy-btn");
+
+  // ── Mermaid 전용 패널 요소 ────────────────────────────────────────────────
+  const panelEl = node.querySelector(".mermaid-panel");
+  const mediaWrapEl = node.querySelector(".mermaid-media-wrap");
   const previewEl = node.querySelector(".mermaid-preview");
+  const actionsEl = node.querySelector(".mermaid-actions");
+  const viewBtn = node.querySelector(".mermaid-view-btn");
+  const downloadBtn = node.querySelector(".mermaid-download-btn");
   const errorEl = node.querySelector(".mermaid-error");
+  const errorMsgEl = node.querySelector(".mermaid-error-msg");
+  const retryBtn = node.querySelector(".mermaid-retry-btn");
 
   let currentLanguage = block.language || "plain";
   let plainCode = block.code || "";
@@ -215,17 +398,36 @@ export function create(block) {
     select.appendChild(opt);
   });
 
+  // ── renderMermaid opts 빌더 ───────────────────────────────────────────────
+  // 매 호출마다 동일한 opts 구조를 생성하는 헬퍼로 코드 중복을 줄인다.
+  function buildRenderOpts(gen) {
+    return {
+      previewEl,
+      errorEl,
+      errorMsgEl,
+      mediaWrapEl,
+      actionsEl,
+      isCancelled: () => _renderGen !== gen,
+    };
+  }
+
   // ── Mermaid 모드 전환 ─────────────────────────────────────────────────────
   // isMermaid === true 일 때: 코드 에디터(소스 편집) + 미리보기 패널을 함께 표시한다.
 
   function applyMermaidMode(isMermaid) {
     node.classList.toggle("is-mermaid", isMermaid);
+    panelEl.hidden = !isMermaid;
+
     if (isMermaid) {
       const gen = ++_renderGen;
-      renderMermaid(block.id, plainCode, previewEl, errorEl, () => _renderGen !== gen);
+      renderMermaid(block.id, plainCode, buildRenderOpts(gen));
     } else {
       ++_renderGen; // 진행 중인 렌더 취소
-      previewEl.hidden = true;
+      // 패널 자체가 hidden 이므로 내부 상태는 재진입 시 renderMermaid 가 덮어쓴다.
+      // 그러나 명시적으로 초기화해 DOM을 일관된 상태로 유지한다.
+      previewEl.innerHTML = "";
+      mediaWrapEl.hidden = true;
+      actionsEl.hidden = true;
       errorEl.hidden = true;
     }
   }
@@ -304,7 +506,7 @@ export function create(block) {
     // blur 시점에 mermaid 미리보기를 갱신한다
     if (currentLanguage === "mermaid") {
       const gen = ++_renderGen;
-      renderMermaid(block.id, plainCode, previewEl, errorEl, () => _renderGen !== gen);
+      renderMermaid(block.id, plainCode, buildRenderOpts(gen));
     }
   });
 
@@ -330,11 +532,31 @@ export function create(block) {
     }
   });
 
+  // ── 복사 버튼 ────────────────────────────────────────────────────────────
   copyBtn.addEventListener("click", () => {
     navigator.clipboard.writeText(plainCode).then(() => {
       copyBtn.textContent = "복사됨";
       setTimeout(() => { copyBtn.textContent = "복사"; }, 1500);
     }).catch(console.error);
+  });
+
+  // ── 크게 보기 버튼 ───────────────────────────────────────────────────────
+  viewBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    openMermaidLightbox(previewEl);
+  });
+
+  // ── 다운로드 버튼 ────────────────────────────────────────────────────────
+  downloadBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    downloadMermaidSvg(previewEl, downloadBtn);
+  });
+
+  // ── 재시도 버튼 ──────────────────────────────────────────────────────────
+  // 렌더 실패 시 표시되는 "재시도" 버튼 — 현재 소스 코드로 renderMermaid 를 재호출한다.
+  retryBtn.addEventListener("click", () => {
+    const gen = ++_renderGen;
+    renderMermaid(block.id, plainCode, buildRenderOpts(gen));
   });
 
   return node;
