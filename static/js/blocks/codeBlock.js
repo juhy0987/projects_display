@@ -261,6 +261,18 @@ function openMermaidLightbox(previewEl) {
   // 열릴 때 포커스를 닫기 버튼으로 이동
   closeBtn.focus();
 
+  // 라이트박스가 열린 후 DOM이 변경되지 않으므로 focusable 목록을 1회만 계산한다.
+  // onKeyDown 내부에서 매 Tab 이벤트마다 querySelectorAll 을 실행하면 불필요한
+  // DOM 순회 비용이 발생한다. (ARIA APG — Managing Focus: Focusable Elements)
+  // Ref: https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/
+  const focusable = [
+    ...overlay.querySelectorAll(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+    ),
+  ].filter((el) => !el.disabled);
+  const focusFirst = focusable[0] ?? null;
+  const focusLast = focusable[focusable.length - 1] ?? null;
+
   function close() {
     overlay.remove();
     document.body.classList.remove("lightbox-open");
@@ -269,7 +281,7 @@ function openMermaidLightbox(previewEl) {
     previousFocus?.focus();
   }
 
-  // 포커스 트랩 — overlay 내 포커스 가능 요소 목록을 Tab/Shift+Tab으로 순환
+  // 포커스 트랩 — overlay 내 포커스 가능 요소를 Tab/Shift+Tab으로 순환
   // (ARIA Authoring Practices Guide — Modal Dialog Pattern)
   function onKeyDown(e) {
     if (e.key === "Escape") {
@@ -278,26 +290,17 @@ function openMermaidLightbox(previewEl) {
     }
 
     if (e.key === "Tab") {
-      const focusable = [
-        ...overlay.querySelectorAll(
-          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
-        ),
-      ].filter((el) => !el.disabled);
-
       if (focusable.length === 0) { e.preventDefault(); return; }
 
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-
       if (e.shiftKey) {
-        if (document.activeElement === first) {
+        if (document.activeElement === focusFirst) {
           e.preventDefault();
-          last.focus();
+          focusLast.focus();
         }
       } else {
-        if (document.activeElement === last) {
+        if (document.activeElement === focusLast) {
           e.preventDefault();
-          first.focus();
+          focusFirst.focus();
         }
       }
     }
