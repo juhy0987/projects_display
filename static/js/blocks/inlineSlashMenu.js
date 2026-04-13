@@ -49,7 +49,7 @@ export function filterSlashItems(query) {
   return SLASH_MENU_ITEMS.filter(
     (item) =>
       item.label.toLowerCase().includes(q) ||
-      item.keywords.some((k) => k.includes(q)),
+      item.keywords.some((k) => k.toLowerCase().includes(q)),
   );
 }
 
@@ -75,7 +75,10 @@ function positionMenu(menuEl, anchorEl) {
   // position: fixed 로 viewport 좌표 직접 지정
   menuEl.style.position = "fixed";
   menuEl.style.left = `${rect.left}px`;
-  menuEl.style.minWidth = `${rect.width}px`;
+  // rect.width 가 maxWidth(320px)를 초과하면 CSS 규칙상 min-width 가 max-width 를
+  // 무력화해 메뉴가 viewport 밖으로 나갈 수 있다. Math.min 으로 clamp 해 충돌을 방지한다.
+  // 참고: CSS Cascading — https://www.w3.org/TR/css-sizing-3/#min-max-widths
+  menuEl.style.minWidth = `${Math.min(rect.width, 320)}px`;
   menuEl.style.maxWidth = "320px";
   menuEl.style.zIndex = "9999";
 
