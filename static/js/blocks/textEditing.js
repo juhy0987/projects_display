@@ -50,9 +50,11 @@ export function makeTextEditable(node, blockId, {
 
   // ── 인라인 슬래시 메뉴 상태 ───────────────────────────────────────────────
   // slashMenu: openInlineSlashMenu() 가 반환하는 { updateQuery, close } 핸들
-  // slashPreText: '/' 입력 직전의 textContent 스냅샷 (Esc 시 복원)
+  // slashPreText: '/' 입력 직전의 textContent 스냅샷 (blur 시 저장 복원에 사용)
+  // slashPreHtml:  '/' 입력 직전의 innerHTML 스냅샷 (Esc·blur 시 인라인 포맷 보존 복원에 사용)
   let slashMenu = null;
   let slashPreText = "";
+  let slashPreHtml = "";
 
   // is-editing 은 가장 가까운 .notion-block 에 적용
   const editingTarget = node.closest(".notion-block") ?? node;
@@ -87,21 +89,17 @@ export function makeTextEditable(node, blockId, {
     if (isInsideToolbar(e.relatedTarget)) return;
     if (node.contentEditable !== "true") return;
 
-    // 슬래시 메뉴가 열려 있을 때 blur 가 발생하면 메뉴를 닫고 저장을 건너뛴다.
+    // 슬래시 메뉴가 열려 있을 때 blur 가 발생하면 메뉴를 닫고 HTML 을 복원한다.
     // ─ 두 가지 상황에서 이 경로가 실행된다:
     //   ① 메뉴 항목 클릭 시: mousedown preventDefault 로 blur 자체가 막히므로 도달 안 함
     //   ② 외부 요소로 포커스 이동 또는 executeItem→reloadDocument 가 DOM 을 재구성해
     //      node 가 제거될 때 브라우저가 blur 를 발생시키는 경우
-    // ─ 이 때 '/' 이후 query 텍스트가 API 에 저장되는 것을 막기 위해
-    //   슬래시 입력 이전 상태로 텍스트를 복원한 뒤 즉시 반환한다.
+    // ─ '/' 이후 query 텍스트 및 인라인 포맷이 손실되지 않도록 slashPreHtml 로 복원한 뒤
+    //   아래 일반 저장 로직으로 fall-through 해 슬래시 이전 내용을 정상 저장한다.
     if (slashMenu) {
-      slashMenu.close();
-      slashMenu = null;
-      node.textContent = slashPreText; // '/' 이전 상태 복원 (query 텍스트 제거)
-      node.contentEditable = "false";
-      editingTarget.classList.remove("is-editing");
-      clearEditingNode();
-      return; // ← '/' 포함 텍스트를 저장하지 않고 종료
+      slashMenu.close(); // onClose 콜백이 slashMenu = null 을 처리한다
+      node.innerHTML = slashPreHtml; // '/' 이전 HTML 복원 (query 텍스트 + 포맷 보존)
+      // return 없이 fall-through → 아래 일반 저장 로직이 slashPreHtml 내용을 저장한다
     }
 
     node.contentEditable = "false";
@@ -156,9 +154,8 @@ export function makeTextEditable(node, blockId, {
       // 메뉴가 이미 열려 있는 상태: '/' 이후 query 를 추출해 업데이트
       const slashIdx = text.lastIndexOf("/");
       if (slashIdx === -1) {
-        // '/'가 지워지면 메뉴 닫기
+        // '/'가 지워지면 메뉴 닫기. onClose 콜백이 slashMenu = null 을 처리한다.
         slashMenu.close();
-        slashMenu = null;
       } else {
         slashMenu.updateQuery(text.slice(slashIdx + 1));
       }
@@ -169,7 +166,25 @@ export function makeTextEditable(node, blockId, {
     // 기존 텍스트에 '/'가 없었고 지금 있다면 방금 입력된 것으로 간주한다.
     if (text.endsWith("/") && !originalText.includes("/")) {
       slashPreText = text.slice(0, -1); // '/' 이전 텍스트 스냅샷 저장
-      slashMenu = openInlineSlashMenu(node, blockId, currentBlockType, { reloadDocument });
+
+      // TreeWalker 로 마지막 텍스트 노드에서 '/' 를 제거한 innerHTML 스냅샷을 저장한다.
+      // textContent 복원은 <b>·<a> 등 인라인 포맷을 제거하므로 innerHTML 로 보존한다.
+      const clone = node.cloneNode(true);
+      const walker = document.createTreeWalker(clone, NodeFilter.SHOW_TEXT);
+      let lastTextNode = null;
+      while (walker.nextNode()) lastTextNode = walker.currentNode;
+      if (lastTextNode?.textContent.endsWith("/")) {
+        lastTextNode.textContent = lastTextNode.textContent.slice(0, -1);
+      }
+      slashPreHtml = clone.innerHTML;
+
+      slashMenu = openInlineSlashMenu(node, blockId, currentBlockType, {
+        reloadDocument,
+        // 메뉴가 자체적으로 닫힐 때(외부 클릭·Enter·Esc) slashMenu 를 null 로 동기화.
+        // 이 콜백이 없으면 메뉴가 닫힌 뒤에도 input 핸들러가 updateQuery 를 계속
+        // 호출하거나 Enter 처리가 차단된 상태로 남는 상태 불일치가 발생한다.
+        onClose: () => { slashMenu = null; },
+      });
     }
   });
 
@@ -180,12 +195,13 @@ export function makeTextEditable(node, blockId, {
     if (e.key === "Escape") {
       e.preventDefault();
 
-      // 슬래시 메뉴가 열려 있으면 메뉴만 닫고 텍스트를 슬래시 이전 상태로 복원
+      // 슬래시 메뉴가 열려 있으면 메뉴만 닫고 텍스트를 슬래시 이전 상태로 복원.
+      // onClose 콜백이 slashMenu = null 을 처리하므로 여기서는 별도 설정 불필요.
       if (slashMenu) {
         slashMenu.close();
-        slashMenu = null;
-        // '/' 이후 입력한 query 를 포함한 텍스트를 슬래시 입력 전 스냅샷으로 되돌린다.
-        node.textContent = slashPreText;
+        // '/' 이후 query 텍스트를 제거하고 슬래시 입력 전 HTML 로 복원한다.
+        // textContent 복원은 <b>·<a> 등 인라인 포맷을 제거하므로 innerHTML 로 복원한다.
+        node.innerHTML = slashPreHtml;
         return;
       }
 
