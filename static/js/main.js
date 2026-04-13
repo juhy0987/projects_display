@@ -16,6 +16,7 @@ import { openPagePickerModal } from "./pagePickerModal.js";
 import { callbacks, renderBlock, renderDocument, focusBlock } from "./blockRenderers.js";
 import { addDocumentItem, closeAllMenus, setActiveItem, enterInlineEdit } from "./documentList.js";
 import { initSidebar } from "./sidebar.js";
+import { openNotionImportModal } from "./notionImportModal.js";
 
 async function initGallery() {
   // 인증 상태 확인 및 로그인 UI 초기화
@@ -465,6 +466,17 @@ async function initGallery() {
     p.className = 'error-state';
     p.textContent = `문서를 불러오지 못했습니다: ${err.message}`;
     root.replaceChildren(p);
+  }
+
+  // ── Notion Import button ─────────────────────────────────────────────────
+  const importBtn = document.getElementById('notion-import-btn');
+  if (importBtn) {
+    importBtn.addEventListener('click', () => {
+      openNotionImportModal(async (docId) => {
+        await reloadSidebar();
+        loadDocument(docId);
+      });
+    });
   }
 
   // ── + 새 문서 button ──────────────────────────────────────────────────────

@@ -191,3 +191,17 @@ export async function apiPatchDatabaseBlock(dbBlockId, fields) {
   _checkPermission(res);
   if (!res.ok) throw new Error('Failed to patch database block');
 }
+
+// ── Notion Import API ────────────────────────────────────────────────────────
+
+export async function apiImportNotion(file) {
+  const form = new FormData();
+  form.append('file', file);
+  const res = await fetch('/api/import/notion', { method: 'POST', body: form });
+  _checkPermission(res);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail ?? 'Notion import에 실패했습니다.');
+  }
+  return res.json();
+}
