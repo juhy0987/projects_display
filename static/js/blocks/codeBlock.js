@@ -475,6 +475,7 @@ export function create(block) {
   // ── Click → activate editing ─────────────────────────────────────────────
   codeEl.addEventListener("click", () => {
     if (codeEl.contentEditable === "true") return;
+    if (document.body.classList.contains("viewer-mode")) return;
     codeEl.contentEditable = "true";
     node.classList.add("is-editing");
     codeEl.focus();

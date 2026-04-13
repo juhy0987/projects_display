@@ -6,6 +6,7 @@ from typing import Any, Literal
 from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, Field
 
+from app.auth.dependencies import require_admin
 from app.dependencies import get_repository
 from app.repositories.sqlite_blocks import SQLiteBlockRepository
 from app.routers.blocks import DatabaseBlockPatch
@@ -19,6 +20,7 @@ router = APIRouter(prefix="/api/database", tags=["database"])
 def patch_database_block(
   block_id: str,
   body: DatabaseBlockPatch,
+  _admin: str = Depends(require_admin),
   repo: SQLiteBlockRepository = Depends(get_repository),
 ) -> dict[str, str]:
   """Update title or color of a database block."""
@@ -48,6 +50,7 @@ class ColumnUpdate(BaseModel):
 def add_column(
   block_id: str,
   body: ColumnCreate,
+  _admin: str = Depends(require_admin),
   repo: SQLiteBlockRepository = Depends(get_repository),
 ) -> dict:
   """Add a new column to a database block's schema."""
@@ -68,6 +71,7 @@ def update_column(
   block_id: str,
   col_id: str,
   body: ColumnUpdate,
+  _admin: str = Depends(require_admin),
   repo: SQLiteBlockRepository = Depends(get_repository),
 ) -> dict[str, str]:
   """Rename or change a column's type/options."""
@@ -83,6 +87,7 @@ def update_column(
 def remove_column(
   block_id: str,
   col_id: str,
+  _admin: str = Depends(require_admin),
   repo: SQLiteBlockRepository = Depends(get_repository),
 ) -> Response:
   """Remove a column from the database schema (and wipes its values from all rows)."""
@@ -101,6 +106,7 @@ class PropertiesUpdate(BaseModel):
 def update_properties(
   block_id: str,
   body: PropertiesUpdate,
+  _admin: str = Depends(require_admin),
   repo: SQLiteBlockRepository = Depends(get_repository),
 ) -> dict[str, str]:
   """Replace all property values on a db_row block."""

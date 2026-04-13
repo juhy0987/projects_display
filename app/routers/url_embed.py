@@ -10,6 +10,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, field_validator
 
+from app.auth.dependencies import require_admin
 from app.dependencies import get_repository
 from app.repositories.sqlite_blocks import SQLiteBlockRepository
 from app.services.url_embed import UrlEmbedMetadata, fetch_url_metadata
@@ -56,6 +57,7 @@ class UrlFetchResponse(BaseModel):
 @router.post("/fetch", response_model=UrlFetchResponse)
 def fetch_embed(
   body: UrlFetchRequest,
+  _admin: str = Depends(require_admin),
   repo: SQLiteBlockRepository = Depends(get_repository),
 ) -> UrlFetchResponse:
   """URL의 Open Graph / Twitter Card 메타데이터를 조회한다.

@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.requests import Request
 
-from app.routers import blocks, database, documents, files, upload, url_embed
+from app.routers import auth, blocks, database, documents, files, upload, url_embed
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -16,6 +16,7 @@ app = FastAPI(title="Project Manager")
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
+app.include_router(auth.router)
 app.include_router(documents.router)
 app.include_router(blocks.router)
 app.include_router(database.router)

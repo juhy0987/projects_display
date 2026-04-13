@@ -10,12 +10,26 @@ import {
   apiMoveBlock,
   apiUpdateDbRowProperties,
 } from "./api.js";
+import { fetchAuthStatus, getAuthState, onAuthChange } from "./auth.js";
+import { initLoginUI } from "./loginModal.js";
 import { openPagePickerModal } from "./pagePickerModal.js";
 import { callbacks, renderBlock, renderDocument, focusBlock } from "./blockRenderers.js";
 import { addDocumentItem, closeAllMenus, setActiveItem, enterInlineEdit } from "./documentList.js";
 import { initSidebar } from "./sidebar.js";
 
 async function initGallery() {
+  // 인증 상태 확인 및 로그인 UI 초기화
+  await fetchAuthStatus();
+  initLoginUI();
+
+  // Viewer 모드: 미인증 시 body에 viewer-mode 클래스를 부여하여
+  // CSS로 쓰기 관련 UI를 일괄 숨긴다.
+  function applyViewerMode(state) {
+    document.body.classList.toggle("viewer-mode", !state.authenticated);
+  }
+  applyViewerMode(getAuthState());
+  onAuthChange(applyViewerMode);
+
   const root = document.getElementById('block-root');
   const list = document.getElementById('document-list');
   const newDocBtn = document.getElementById('new-document-btn');
@@ -29,6 +43,7 @@ async function initGallery() {
 
   pageTitle.addEventListener('click', () => {
     if (pageTitle.contentEditable === 'true' || !activeDocId) return;
+    if (!getAuthState().authenticated) return;
     titleOriginal = pageTitle.textContent;
     titleEscaped = false;
     pageTitle.contentEditable = 'true';

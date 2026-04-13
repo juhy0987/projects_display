@@ -2768,3 +2768,204 @@ body.lightbox-open {
   color: #c0392b;
   outline: none;
 }
+
+/* ── 관리자 인증 버튼 ─────────────────────────────────────────────────────── */
+
+.auth-btn {
+  position: fixed;
+  top: 0.75rem;
+  right: 1rem;
+  z-index: 200;
+  padding: 0.35rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--ink);
+  font-size: 0.8rem;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.auth-btn:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.auth-btn.is-authenticated {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+.auth-btn.is-authenticated:hover {
+  background: #005a57;
+  border-color: #005a57;
+}
+
+/* ── 로그인 모달 ──────────────────────────────────────────────────────────── */
+
+.login-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(2px);
+}
+
+.login-modal-overlay.is-open {
+  display: flex;
+}
+
+.login-modal {
+  position: relative;
+  width: 340px;
+  padding: 2rem 1.8rem;
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow: 0 8px 32px var(--shadow);
+}
+
+.login-modal-title {
+  margin: 0 0 1.2rem;
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: var(--ink);
+  text-align: center;
+}
+
+.login-modal-error {
+  margin: 0 0 0.8rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  background: #fef2f2;
+  color: #c0392b;
+  font-size: 0.8rem;
+  text-align: center;
+}
+
+.login-modal-error[hidden] {
+  display: none;
+}
+
+.login-modal-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.login-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.login-field-label {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--ink-soft);
+}
+
+.login-field-input {
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 0.88rem;
+  font-family: inherit;
+  background: #fff;
+  color: var(--ink);
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.login-field-input:focus {
+  border-color: var(--accent);
+}
+
+.login-modal-submit {
+  margin-top: 0.3rem;
+  padding: 0.6rem;
+  border: none;
+  border-radius: 6px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.login-modal-submit:hover {
+  background: #005a57;
+}
+
+.login-modal-close {
+  position: absolute;
+  top: 0.6rem;
+  right: 0.6rem;
+  padding: 0.2rem 0.4rem;
+  border: none;
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 1rem;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.login-modal-close:hover {
+  color: var(--ink);
+}
+
+/* ── Viewer 모드: 쓰기 UI 숨김 ───────────────────────────────────────────── */
+/* 미인증(viewer) 상태에서 생성/수정/삭제 관련 UI 요소를 숨긴다. */
+
+body.viewer-mode .new-document-btn,
+body.viewer-mode .block-actions,
+body.viewer-mode .block-palette,
+body.viewer-mode .block-delete-confirm,
+body.viewer-mode .block-more-menu,
+body.viewer-mode .inline-slash-menu,
+body.viewer-mode .document-item-menu {
+  display: none !important;
+}
+
+/* 텍스트 편집 비활성화 — contentEditable 요소의 커서/포커스 스타일 제거 */
+body.viewer-mode .notion-text,
+body.viewer-mode .toggle-title,
+body.viewer-mode .quote-text,
+body.viewer-mode .callout-text,
+body.viewer-mode .code-content,
+body.viewer-mode .notion-caption,
+body.viewer-mode #page-title {
+  cursor: default !important;
+}
+
+/* 코드 블록 언어 선택 비활성화 */
+body.viewer-mode .code-language-select {
+  pointer-events: none;
+}
+
+/* DB 속성 입력 비활성화 */
+body.viewer-mode .db-prop-input,
+body.viewer-mode .db-prop-checkbox,
+body.viewer-mode .db-cell-input,
+body.viewer-mode .db-cell-checkbox {
+  pointer-events: none;
+  opacity: 0.7;
+}
+
+/* 이미지 블록: 더보기(변경/삭제) 숨김, 크게 보기는 유지 */
+body.viewer-mode .image-more-btn,
+body.viewer-mode .image-more-menu {
+  display: none !important;
+}
+
+/* 사이드바 문서 컨텍스트 메뉴(삭제/이름변경) 버튼 숨김 */
+body.viewer-mode .document-actions-btn {
+  display: none !important;
+}

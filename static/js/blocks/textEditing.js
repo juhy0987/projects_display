@@ -70,6 +70,8 @@ export function makeTextEditable(node, blockId, {
       }
     }
     if (node.contentEditable === "true") return;
+    // Viewer 모드에서는 편집 진입을 차단한다
+    if (document.body.classList.contains("viewer-mode")) return;
     originalHtml = node.innerHTML;
     originalText = node.textContent;
     escaped = false;

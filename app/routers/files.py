@@ -25,6 +25,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app.auth.dependencies import require_admin
 from app.dependencies import get_session
 from app.repositories.file_repo import SQLiteFileRepository
 from app.services.file import (
@@ -70,6 +71,7 @@ def _to_response(row) -> FileMetadataResponse:
 
 @router.post("", status_code=201, response_model=FileMetadataResponse)
 async def upload_file(
+  _admin: str = Depends(require_admin),
   file: UploadFile = File(...),
   repo: SQLiteFileRepository = Depends(_get_file_repo),
 ) -> FileMetadataResponse:
@@ -166,6 +168,7 @@ def download_file(
 @router.delete("/{file_id}", status_code=204)
 def delete_file(
   file_id: str,
+  _admin: str = Depends(require_admin),
   repo: SQLiteFileRepository = Depends(_get_file_repo),
 ) -> None:
   """파일 메타데이터(DB)와 디스크 파일을 함께 삭제합니다.

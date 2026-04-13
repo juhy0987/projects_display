@@ -5,6 +5,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel
 
+from app.auth.dependencies import require_admin
 from app.dependencies import get_repository
 from app.repositories.sqlite_blocks import SQLiteBlockRepository
 
@@ -48,6 +49,7 @@ class BlockTypeChange(BaseModel):
 def patch_block(
   block_id: str,
   body: BlockPatch,
+  _admin: str = Depends(require_admin),
   repo: SQLiteBlockRepository = Depends(get_repository),
 ) -> dict[str, str]:
   """Update editable content fields of a block."""
@@ -63,6 +65,7 @@ def patch_block(
 def move_block(
   block_id: str,
   body: BlockPositionPatch,
+  _admin: str = Depends(require_admin),
   repo: SQLiteBlockRepository = Depends(get_repository),
 ) -> dict[str, str]:
   """Reorder a block among its siblings."""
@@ -78,6 +81,7 @@ def move_block(
 def change_block_type(
   block_id: str,
   body: BlockTypeChange,
+  _admin: str = Depends(require_admin),
   repo: SQLiteBlockRepository = Depends(get_repository),
 ) -> dict[str, str]:
   """Change a block's type and reset its content to defaults."""
@@ -89,6 +93,7 @@ def change_block_type(
 @router.delete("/{block_id}", status_code=204)
 def delete_block(
   block_id: str,
+  _admin: str = Depends(require_admin),
   repo: SQLiteBlockRepository = Depends(get_repository),
 ) -> Response:
   """Delete a block and all its descendants."""

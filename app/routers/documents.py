@@ -5,6 +5,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, field_validator
 
+from app.auth.dependencies import require_admin
 from app.dependencies import get_repository
 from app.models.blocks import BlockDocument
 from app.repositories.sqlite_blocks import SQLiteBlockRepository
@@ -48,7 +49,10 @@ def get_document(
 
 
 @router.post("", status_code=201)
-def create_document(repo: SQLiteBlockRepository = Depends(get_repository)) -> dict:
+def create_document(
+  _admin: str = Depends(require_admin),
+  repo: SQLiteBlockRepository = Depends(get_repository),
+) -> dict:
   """Create a new empty document and return its info."""
   return repo.create_document()
 
@@ -57,6 +61,7 @@ def create_document(repo: SQLiteBlockRepository = Depends(get_repository)) -> di
 def update_document_title(
   document_id: str,
   body: DocumentTitleUpdate,
+  _admin: str = Depends(require_admin),
   repo: SQLiteBlockRepository = Depends(get_repository),
 ) -> dict[str, str]:
   """Update the title of an existing document."""
@@ -76,6 +81,7 @@ class BlockCreate(BaseModel):
 def create_block(
   document_id: str,
   body: BlockCreate,
+  _admin: str = Depends(require_admin),
   repo: SQLiteBlockRepository = Depends(get_repository),
 ) -> dict:
   """Append a new block to a document.
@@ -101,6 +107,7 @@ def create_block(
 @router.delete("/{document_id}", status_code=204)
 def delete_document(
   document_id: str,
+  _admin: str = Depends(require_admin),
   repo: SQLiteBlockRepository = Depends(get_repository),
 ) -> None:
   """Delete a document and all its blocks."""
