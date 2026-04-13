@@ -70,7 +70,6 @@ let _errorMsg = null;
 function _createLoginModal() {
   _modal = document.createElement("div");
   _modal.className = "login-modal-overlay";
-  _modal.hidden = true;
 
   const dialog = document.createElement("div");
   dialog.className = "login-modal";
@@ -148,7 +147,7 @@ function _createField(form, type, label, name) {
 }
 
 function _openModal() {
-  _modal.hidden = false;
+  _modal.classList.add("is-open");
   _errorMsg.hidden = true;
   _usernameInput.value = "";
   _passwordInput.value = "";
@@ -159,7 +158,7 @@ function _openModal() {
 }
 
 function _closeModal() {
-  _modal.hidden = true;
+  _modal.classList.remove("is-open");
   document.removeEventListener("keydown", _onKeydown);
 }
 

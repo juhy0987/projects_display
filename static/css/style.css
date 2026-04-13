@@ -2810,15 +2810,15 @@ body.lightbox-open {
   position: fixed;
   inset: 0;
   z-index: 1000;
-  display: flex;
+  display: none;
   align-items: center;
   justify-content: center;
   background: rgba(0, 0, 0, 0.4);
   backdrop-filter: blur(2px);
 }
 
-.login-modal-overlay[hidden] {
-  display: none;
+.login-modal-overlay.is-open {
+  display: flex;
 }
 
 .login-modal {
