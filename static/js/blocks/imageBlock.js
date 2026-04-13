@@ -18,7 +18,6 @@ export function create(block, { callbacks } = {}) {
   const template = document.getElementById("image-block-template");
   const node = template.content.firstElementChild.cloneNode(true);
 
-  const mediaWrap = node.querySelector(".image-media-wrap");
   const image = node.querySelector(".notion-image");
   const caption = node.querySelector(".notion-caption");
   const actionsEl = node.querySelector(".image-actions");
@@ -51,6 +50,13 @@ export function create(block, { callbacks } = {}) {
    * @param {HTMLElement} anchorEl — image 또는 placeholder
    */
   function openEditPanel(anchorEl) {
+    // onCommit / onCancel 공통 teardown — DRY
+    const closePanel = () => {
+      panel.replaceWith(currentUrl ? image : placeholder);
+      actionsEl.hidden = !currentUrl;
+      node.classList.remove("is-editing");
+    };
+
     const panel = buildImageEditPanel({
       currentUrl,
       onCommit(newUrl) {
@@ -60,16 +66,9 @@ export function create(block, { callbacks } = {}) {
           image.alt = caption.textContent.trim();
           apiPatchBlock(block.id, { url: newUrl }).catch(console.error);
         }
-        // 편집 완료 후 이미지 또는 플레이스홀더 복원
-        panel.replaceWith(currentUrl ? image : placeholder);
-        actionsEl.hidden = !currentUrl;
-        node.classList.remove("is-editing");
+        closePanel();
       },
-      onCancel() {
-        panel.replaceWith(currentUrl ? image : placeholder);
-        actionsEl.hidden = !currentUrl;
-        node.classList.remove("is-editing");
-      },
+      onCancel: closePanel,
     });
     node.classList.add("is-editing");
     anchorEl.replaceWith(panel);
