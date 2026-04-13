@@ -128,8 +128,12 @@ function _ensureMermaidHljs() {
  * @param {string} source  - Mermaid 문법 소스 코드
  * @param {HTMLElement} previewEl - SVG를 삽입할 컨테이너
  * @param {HTMLElement} errorEl   - 오류 메시지를 표시할 컨테이너
+ * @param {function(): boolean} isCancelled - true를 반환하면 DOM 갱신을 건너뛴다.
+ *   blur → language change 순서로 이벤트가 발생할 때, blur 핸들러에서 시작된
+ *   async 렌더가 language change 이후에 완료되며 previewEl을 다시 노출시키는
+ *   경쟁 조건을 방지한다.
  */
-async function renderMermaid(blockId, source, previewEl, errorEl) {
+async function renderMermaid(blockId, source, previewEl, errorEl, isCancelled = () => false) {
   if (!window.mermaid) {
     errorEl.textContent = "Mermaid 라이브러리를 불러오지 못했습니다.";
     errorEl.hidden = false;
@@ -152,6 +156,7 @@ async function renderMermaid(blockId, source, previewEl, errorEl) {
   const renderId = `mermaid-${blockId.replace(/-/g, "")}-${Date.now()}`;
   try {
     const { svg } = await window.mermaid.render(renderId, trimmed);
+    if (isCancelled()) return; // 렌더 완료 전 언어 전환 등으로 mermaid 모드가 해제된 경우
     previewEl.innerHTML = svg;
 
     // Mermaid v10+ 는 SVG에 두 가지 방식으로 크기를 고정한다.
@@ -171,6 +176,7 @@ async function renderMermaid(blockId, source, previewEl, errorEl) {
     previewEl.hidden = false;
     errorEl.hidden = true;
   } catch (err) {
+    if (isCancelled()) return;
     // mermaid.render()는 문법 오류 시 Error 객체 또는 문자열을 throw할 수 있다.
     // err?.message || err 순서로 평가해 두 경우를 모두 커버한다.
     previewEl.innerHTML = "";
@@ -197,6 +203,10 @@ export function create(block) {
   let plainCode = block.code || "";
   let originalCode = plainCode;
 
+  // 세대 카운터: applyMermaidMode(false) 시 증가해 in-flight 렌더를 무효화한다.
+  // 각 렌더 시작 시 현재 세대를 캡처하고, 완료 시점에 세대가 바뀌었으면 DOM 갱신을 생략한다.
+  let _renderGen = 0;
+
   CODE_LANGUAGES.forEach((lang) => {
     const opt = document.createElement("option");
     opt.value = lang;
@@ -211,8 +221,10 @@ export function create(block) {
   function applyMermaidMode(isMermaid) {
     node.classList.toggle("is-mermaid", isMermaid);
     if (isMermaid) {
-      renderMermaid(block.id, plainCode, previewEl, errorEl);
+      const gen = ++_renderGen;
+      renderMermaid(block.id, plainCode, previewEl, errorEl, () => _renderGen !== gen);
     } else {
+      ++_renderGen; // 진행 중인 렌더 취소
       previewEl.hidden = true;
       errorEl.hidden = true;
     }
@@ -291,7 +303,8 @@ export function create(block) {
     }
     // blur 시점에 mermaid 미리보기를 갱신한다
     if (currentLanguage === "mermaid") {
-      renderMermaid(block.id, plainCode, previewEl, errorEl);
+      const gen = ++_renderGen;
+      renderMermaid(block.id, plainCode, previewEl, errorEl, () => _renderGen !== gen);
     }
   });
 
