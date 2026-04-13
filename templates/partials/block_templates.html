@@ -4,7 +4,43 @@
 
 <template id="image-block-template">
   <figure class="notion-block notion-image-wrap">
-    <img class="notion-image" alt="" loading="lazy" />
+    <!-- 이미지/플레이스홀더/편집 패널을 감싸는 래퍼 (action overlay 기준점) -->
+    <div class="image-media-wrap">
+      <img class="notion-image" alt="" loading="lazy" />
+      <!-- 이미지 로드 상태일 때만 표시되는 액션 overlay -->
+      <div class="image-actions" aria-label="이미지 액션" hidden>
+        <button
+          type="button"
+          class="image-action-btn image-view-btn"
+          aria-label="크게 보기"
+        >크게 보기</button>
+        <button
+          type="button"
+          class="image-action-btn image-more-btn"
+          aria-label="더보기"
+          aria-expanded="false"
+          aria-haspopup="menu"
+        >···</button>
+        <!-- 더보기 드롭다운 메뉴 -->
+        <ul class="image-more-menu" role="menu" hidden>
+          <li role="none">
+            <button type="button" class="image-menu-item" data-action="change-image" role="menuitem">
+              이미지 변경
+            </button>
+          </li>
+          <li role="none">
+            <button type="button" class="image-menu-item" data-action="edit-caption" role="menuitem">
+              캡션 편집
+            </button>
+          </li>
+          <li role="none">
+            <button type="button" class="image-menu-item image-menu-item--danger" data-action="delete" role="menuitem">
+              삭제
+            </button>
+          </li>
+        </ul>
+      </div>
+    </div>
     <figcaption class="notion-caption" data-placeholder="캡션 추가..."></figcaption>
   </figure>
 </template>

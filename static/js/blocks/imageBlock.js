@@ -1,18 +1,29 @@
 // ── Image Block ───────────────────────────────────────────────────────────────
 
-import { apiPatchBlock, apiUploadImage } from "../api.js";
+import { apiPatchBlock, apiUploadImage, apiDeleteBlock } from "../api.js";
 
 export const type = "image";
 
 /**
+ * 이미지 블록 DOM을 생성합니다.
+ *
+ * 이미지가 있을 때: hover 시 우상단에 '크게 보기' / '···' 버튼 노출.
+ * 이미지가 없을 때: 플레이스홀더 클릭으로 편집 패널 진입.
+ *
  * @param {object} block
+ * @param {{ callbacks: object }} opts — blockRenderers.js가 전달하는 콜백 묶음
  * @returns {HTMLElement}
  */
-export function create(block) {
+export function create(block, { callbacks } = {}) {
   const template = document.getElementById("image-block-template");
   const node = template.content.firstElementChild.cloneNode(true);
+
   const image = node.querySelector(".notion-image");
   const caption = node.querySelector(".notion-caption");
+  const actionsEl = node.querySelector(".image-actions");
+  const viewBtn = node.querySelector(".image-view-btn");
+  const moreBtn = node.querySelector(".image-more-btn");
+  const moreMenu = node.querySelector(".image-more-menu");
 
   let currentUrl = block.url || "";
   image.src = currentUrl;
@@ -21,36 +32,140 @@ export function create(block) {
 
   if (!block.caption) caption.classList.add("is-empty");
 
+  // 이미지가 없으면 플레이스홀더로 교체
   const placeholder = document.createElement("div");
   placeholder.className = "image-placeholder";
   placeholder.textContent = "이미지를 추가하려면 클릭하세요";
-  if (!currentUrl) image.replaceWith(placeholder);
+  if (!currentUrl) {
+    image.replaceWith(placeholder);
+  }
 
+  // 액션 버튼은 이미지가 있을 때만 표시
+  actionsEl.hidden = !currentUrl;
+
+  // ── 편집 패널 ────────────────────────────────────────────────────────────
+
+  /**
+   * 이미지 변경 편집 패널을 열고 anchorEl 자리를 교체합니다.
+   * @param {HTMLElement} anchorEl — image 또는 placeholder
+   */
   function openEditPanel(anchorEl) {
+    // onCommit / onCancel 공통 teardown — DRY
+    const closePanel = () => {
+      panel.replaceWith(currentUrl ? image : placeholder);
+      actionsEl.hidden = !currentUrl;
+      node.classList.remove("is-editing");
+    };
+
     const panel = buildImageEditPanel({
       currentUrl,
       onCommit(newUrl) {
         if (newUrl && newUrl !== currentUrl) {
           currentUrl = newUrl;
           image.src = newUrl;
+          image.alt = caption.textContent.trim();
           apiPatchBlock(block.id, { url: newUrl }).catch(console.error);
         }
-        panel.replaceWith(currentUrl ? image : placeholder);
-        node.classList.remove("is-editing");
+        closePanel();
       },
-      onCancel() {
-        panel.replaceWith(currentUrl ? image : placeholder);
-        node.classList.remove("is-editing");
-      },
+      onCancel: closePanel,
     });
     node.classList.add("is-editing");
     anchorEl.replaceWith(panel);
   }
 
-  image.addEventListener("click", () => openEditPanel(image));
+  // 플레이스홀더 클릭 → 편집 패널 (이미지 없을 때)
   placeholder.addEventListener("click", () => openEditPanel(placeholder));
 
-  // ── Caption editing ──────────────────────────────────────────────────────
+  // ── 크게 보기 (라이트박스) ───────────────────────────────────────────────
+
+  viewBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    openLightbox(currentUrl, caption.textContent.trim());
+  });
+
+  // ── 더보기 드롭다운 ──────────────────────────────────────────────────────
+
+  // 외부 클릭 핸들러 — toggleMenu(true) 때만 등록, false 때 해제
+  // 블록당 하나의 named 함수를 재사용해 addEventListener/removeEventListener가
+  // 동일 참조로 짝을 맞출 수 있도록 한다.
+  const handleOutsideClick = (e) => {
+    if (!node.contains(e.target)) toggleMenu(false);
+  };
+
+  /** 드롭다운 열기/닫기 */
+  function toggleMenu(open) {
+    moreMenu.hidden = !open;
+    moreBtn.setAttribute("aria-expanded", String(open));
+    if (open) {
+      // 첫 번째 메뉴 항목에 포커스
+      const first = moreMenu.querySelector("[role='menuitem']");
+      first?.focus();
+      // 열릴 때만 외부 클릭 감지 시작
+      document.addEventListener("click", handleOutsideClick, { capture: true });
+    } else {
+      // 닫힐 때 리스너 즉시 해제 → 블록이 많아도 클릭당 1회만 실행
+      document.removeEventListener("click", handleOutsideClick, { capture: true });
+    }
+  }
+
+  moreBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    toggleMenu(moreMenu.hidden); // 토글
+  });
+
+  // 메뉴 항목 키보드 탐색 (ArrowUp / ArrowDown)
+  moreMenu.addEventListener("keydown", (e) => {
+    const items = [...moreMenu.querySelectorAll("[role='menuitem']")];
+    const idx = items.indexOf(document.activeElement);
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      items[(idx + 1) % items.length]?.focus();
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      items[(idx - 1 + items.length) % items.length]?.focus();
+    }
+  });
+
+  // ESC로 드롭다운 닫기
+  node.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !moreMenu.hidden) {
+      e.stopPropagation();
+      toggleMenu(false);
+      moreBtn.focus();
+    }
+  });
+
+  // 드롭다운 메뉴 액션 처리
+  moreMenu.addEventListener("click", async (e) => {
+    const btn = e.target.closest("[data-action]");
+    if (!btn) return;
+
+    toggleMenu(false);
+
+    switch (btn.dataset.action) {
+      case "change-image":
+        // 현재 이미지(또는 플레이스홀더) 자리에 편집 패널 열기
+        openEditPanel(currentUrl ? image : placeholder);
+        break;
+
+      case "edit-caption":
+        caption.focus();
+        break;
+
+      case "delete":
+        try {
+          await apiDeleteBlock(block.id);
+          callbacks?.reloadDocument?.();
+        } catch (err) {
+          console.error("이미지 블록 삭제 실패:", err);
+        }
+        break;
+    }
+  });
+
+  // ── 캡션 편집 ────────────────────────────────────────────────────────────
+
   let originalCaption = block.caption || "";
   let captionEscaped = false;
   caption.contentEditable = "true";
@@ -87,7 +202,101 @@ export function create(block) {
   return node;
 }
 
-// ── Image edit panel (URL / file upload) ─────────────────────────────────────
+// ── 라이트박스 ────────────────────────────────────────────────────────────────
+
+/**
+ * 전체화면 이미지 뷰어를 열고 ESC / 배경 클릭 / 닫기 버튼으로 종료합니다.
+ *
+ * 접근성:
+ *   - role="dialog" + aria-modal="true" 로 스크린리더에 모달임을 알림
+ *   - 열릴 때 닫기 버튼으로 포커스 이동
+ *   - ESC 키로 종료
+ *   - body.lightbox-open으로 배경 스크롤 잠금
+ *
+ * @param {string} src
+ * @param {string} alt
+ */
+function openLightbox(src, alt) {
+  // 닫힌 후 포커스를 복원할 트리거 요소를 미리 저장 (WCAG 2.4.3)
+  const previousFocus = document.activeElement;
+
+  const overlay = document.createElement("div");
+  overlay.className = "image-lightbox-overlay";
+  overlay.setAttribute("role", "dialog");
+  overlay.setAttribute("aria-modal", "true");
+  overlay.setAttribute("aria-label", "이미지 크게 보기");
+
+  const closeBtn = document.createElement("button");
+  closeBtn.type = "button";
+  closeBtn.className = "image-lightbox-close";
+  closeBtn.setAttribute("aria-label", "닫기");
+  closeBtn.textContent = "✕";
+
+  const img = document.createElement("img");
+  img.className = "image-lightbox-img";
+  img.src = src;
+  img.alt = alt;
+
+  overlay.append(closeBtn, img);
+  document.body.append(overlay);
+  document.body.classList.add("lightbox-open");
+
+  // 열릴 때 포커스를 닫기 버튼으로 이동
+  closeBtn.focus();
+
+  function close() {
+    overlay.remove();
+    document.body.classList.remove("lightbox-open");
+    document.removeEventListener("keydown", onKeyDown);
+    // 닫힌 후 트리거 요소로 포커스 복원 (WCAG 2.4.3 Focus Order)
+    previousFocus?.focus();
+  }
+
+  // 포커스 트랩 — overlay 내 포커스 가능 요소 목록을 Tab/Shift+Tab으로 순환
+  // (ARIA Authoring Practices Guide — Modal Dialog Pattern)
+  function onKeyDown(e) {
+    if (e.key === "Escape") {
+      close();
+      return;
+    }
+
+    if (e.key === "Tab") {
+      const focusable = [
+        ...overlay.querySelectorAll(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+        ),
+      ].filter((el) => !el.disabled);
+
+      if (focusable.length === 0) { e.preventDefault(); return; }
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+
+      if (e.shiftKey) {
+        // Shift+Tab: 첫 요소에서 뒤로 가면 마지막 요소로 순환
+        if (document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else {
+        // Tab: 마지막 요소에서 앞으로 가면 첫 요소로 순환
+        if (document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    }
+  }
+
+  closeBtn.addEventListener("click", close);
+  // 오버레이 배경(이미지 외부) 클릭 시 닫기
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) close();
+  });
+  document.addEventListener("keydown", onKeyDown);
+}
+
+// ── 이미지 편집 패널 (URL / 파일 업로드) ─────────────────────────────────────
 
 /**
  * URL 입력과 파일 업로드를 탭으로 전환할 수 있는 편집 패널을 반환합니다.
