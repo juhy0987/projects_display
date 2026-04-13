@@ -145,8 +145,11 @@ async function renderMermaid(blockId, source, previewEl, errorEl) {
     return;
   }
 
-  // mermaid.render() 의 id는 DOM에서 고유해야 하며, UUID의 하이픈을 제거해 유효한 HTML id로 변환
-  const renderId = `mermaid-${blockId.replace(/-/g, "")}`;
+  // mermaid.render() 의 id는 호출 시점마다 DOM 내에서 고유해야 한다.
+  // 동일 블록을 재렌더링(blur 후 수정 → blur)하면 이전 SVG가 동일 id를 가진 채 DOM에 남아
+  // 충돌이 발생한다. Date.now() 를 접미사로 붙여 매 호출마다 고유 id를 보장한다.
+  // Ref: https://mermaid.js.org/config/usage.html#using-mermaid-render
+  const renderId = `mermaid-${blockId.replace(/-/g, "")}-${Date.now()}`;
   try {
     const { svg } = await window.mermaid.render(renderId, trimmed);
     previewEl.innerHTML = svg;
@@ -168,10 +171,11 @@ async function renderMermaid(blockId, source, previewEl, errorEl) {
     previewEl.hidden = false;
     errorEl.hidden = true;
   } catch (err) {
-    // mermaid.render()는 문법 오류 시 Error를 throw한다
+    // mermaid.render()는 문법 오류 시 Error 객체 또는 문자열을 throw할 수 있다.
+    // err?.message || err 순서로 평가해 두 경우를 모두 커버한다.
     previewEl.innerHTML = "";
     previewEl.hidden = true;
-    errorEl.textContent = `Mermaid 문법 오류: ${err?.message ?? "알 수 없는 오류"}`;
+    errorEl.textContent = "Mermaid 문법 오류: " + (err?.message || err || "알 수 없는 오류");
     errorEl.hidden = false;
   }
 }
