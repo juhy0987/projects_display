@@ -27,13 +27,13 @@ function ensureDialog() {
     <div class="notion-import-content">
       <h3 class="notion-import-title">Notion Import</h3>
       <p class="notion-import-desc">
-        Notion에서 export한 HTML 또는 ZIP 파일을 선택하세요.
+        Notion에서 export한 HTML, Markdown 또는 ZIP 파일을 선택하세요.
       </p>
 
       <div class="notion-import-dropzone" id="notion-import-dropzone">
         <span class="notion-import-dropzone-icon">&#128196;</span>
-        <span class="notion-import-dropzone-text">.html 또는 .zip 파일을 드래그하거나 클릭하세요</span>
-        <input type="file" id="notion-import-file" accept=".html,.htm,.zip" hidden />
+        <span class="notion-import-dropzone-text">.html, .md 또는 .zip 파일을 드래그하거나 클릭하세요</span>
+        <input type="file" id="notion-import-file" accept=".html,.htm,.md,.zip" hidden />
       </div>
 
       <div class="notion-import-selected" id="notion-import-selected" hidden>
@@ -126,8 +126,8 @@ let onComplete = null;
 
 function selectFile(file) {
   const name = file.name.toLowerCase();
-  if (!name.endsWith(".html") && !name.endsWith(".htm") && !name.endsWith(".zip")) {
-    alert("지원하지 않는 파일 형식입니다. .html 또는 .zip 파일을 선택해주세요.");
+  if (!name.endsWith(".html") && !name.endsWith(".htm") && !name.endsWith(".md") && !name.endsWith(".zip")) {
+    alert("지원하지 않는 파일 형식입니다. .html, .md 또는 .zip 파일을 선택해주세요.");
     return;
   }
 
