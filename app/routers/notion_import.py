@@ -28,6 +28,7 @@ from app.services.notion_import import (
   ImportResult,
   extract_and_parse_zip,
   parse_single_html,
+  parse_single_markdown,
 )
 
 logger = logging.getLogger(__name__)
@@ -60,11 +61,12 @@ async def import_notion(
   file: UploadFile = File(...),
   repo: SQLiteBlockRepository = Depends(get_repository),
 ) -> ImportResponse:
-  """Notion export HTML/ZIP 파일을 프로젝트 페이지로 변환 import합니다.
+  """Notion export 파일을 프로젝트 페이지로 변환 import합니다.
 
   지원 파일 형식:
-    - .html — 단일 Notion 페이지
-    - .zip  — Notion export 아카이브 (다중 페이지/이미지 포함)
+    - .html — 단일 Notion HTML 페이지
+    - .md   — 단일 Notion Markdown 페이지
+    - .zip  — Notion export 아카이브 (HTML/Markdown + 이미지/CSV 포함)
 
   Returns:
     생성된 루트 문서 ID, 제목, 페이지 수, 변환 리포트.
@@ -77,10 +79,11 @@ async def import_notion(
   filename = file.filename or ""
   lower_name = filename.lower()
 
-  if not (lower_name.endswith(".html") or lower_name.endswith(".htm") or lower_name.endswith(".zip")):
+  _ALLOWED_EXTS = (".html", ".htm", ".md", ".zip")
+  if not any(lower_name.endswith(ext) for ext in _ALLOWED_EXTS):
     raise HTTPException(
       status_code=415,
-      detail="지원하지 않는 파일 형식입니다. .html 또는 .zip 파일을 업로드해주세요.",
+      detail="지원하지 않는 파일 형식입니다. .html, .md 또는 .zip 파일을 업로드해주세요.",
     )
 
   # 청크 단위로 읽어 메모리 제한 방어
@@ -106,6 +109,8 @@ async def import_notion(
   try:
     if lower_name.endswith(".zip"):
       result = extract_and_parse_zip(data)
+    elif lower_name.endswith(".md"):
+      result = parse_single_markdown(data)
     else:
       result = parse_single_html(data)
   except ValueError as exc:
