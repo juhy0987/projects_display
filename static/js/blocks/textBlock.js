@@ -24,6 +24,7 @@ export function create(block, { callbacks = {} } = {}) {
   if (block.level) node.dataset.level = String(block.level);
 
   makeTextEditable(node, block.id, {
+    currentBlockType: block.type,
     addBlock: callbacks.addBlock,
     addBlockAfter: callbacks.addBlockAfter,
     reloadDocument: callbacks.reloadDocument,
