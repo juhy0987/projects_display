@@ -1091,10 +1091,11 @@ class TestCsvParsing:
     md_parent = f"# Project\n\n- [Tasks](Tasks%20{uuid_hash}.csv)"
     md_row_a = "# Task A\n\nDetail for A"
     csv_content = "Name,Status\nTask A,Done\nTask B,Todo"
+    # Notion export 의 실제 레이아웃: 동반 디렉터리에는 UUID 해시가 없다.
     zip_data = _make_zip({
       "Root/page.md": md_parent,
       f"Root/Tasks {uuid_hash}.csv": csv_content,
-      f"Root/Tasks {uuid_hash}/Task A {row_uuid}.md": md_row_a,
+      f"Root/Tasks/Task A {row_uuid}.md": md_row_a,
     })
     result = extract_and_parse_zip(zip_data)
 
@@ -1116,6 +1117,42 @@ class TestCsvParsing:
     # 매칭 페이지가 없는 Task B 는 children 이 비어있다 (신규 생성)
     assert rows_by_title["Task B"]["children"] == []
 
+  def test_row_page_absorbed_with_korean_real_notion_layout(self):
+    """Notion 실제 export 레이아웃 회귀 테스트.
+
+    예: "범진님이 주신 팁" 페이지가 "자료 정리 <uuid>.csv" 데이터베이스에
+    속하는 형태. CSV 와 같은 디렉터리에 UUID 없는 이름의 자매 폴더가 있고,
+    그 안에 row 상세 md 가 위치한다.
+    """
+    csv_uuid = "2b7b6f198639811fa1c1de11af2a0139"
+    row_uuid = "2b7b6f1986398128874fe950e502335a"
+    csv_rel = f"자료 정리 {csv_uuid}.csv"
+    parent_md = f"# 푸항항\n\n- [자료 정리]({csv_rel.replace(' ', '%20')})"
+    row_md = "# 범진님이 주신 팁\n\n실전 팁 본문"
+    csv_body = "이름,카테고리\n범진님이 주신 팁,팁"
+
+    zip_data = _make_zip({
+      "푸항항.md": parent_md,
+      f"푸항항/{csv_rel}": csv_body,
+      f"푸항항/자료 정리/범진님이 주신 팁 {row_uuid}.md": row_md,
+    })
+    result = extract_and_parse_zip(zip_data)
+
+    # row 페이지는 독립 페이지로 남아있지 않아야 한다
+    remaining_titles = [p["title"] for p in result.pages]
+    assert "범진님이 주신 팁" not in remaining_titles
+
+    db_blocks = [b for p in result.pages for b in p["blocks"]
+                 if b.get("type") == "database"]
+    assert len(db_blocks) == 1
+    rows_by_title = {r["title"]: r for r in db_blocks[0]["children"]}
+    assert "범진님이 주신 팁" in rows_by_title
+    # 흡수된 행의 children 에 본문 텍스트가 포함된다
+    assert any(
+      "실전 팁 본문" in b.get("text", "")
+      for b in rows_by_title["범진님이 주신 팁"]["children"]
+    )
+
   def test_row_pages_merged_end_to_end(self, client):
     """API 전체 플로우: row 페이지가 db_row 에만 존재하고 트리에 중복되지 않는다."""
     uuid_hash = "cccccccccccccccccccccccccccccccc"
@@ -1123,7 +1160,7 @@ class TestCsvParsing:
     zip_data = _make_zip({
       "Root/page.md": f"# Parent\n\n- [Tasks](Tasks%20{uuid_hash}.csv)",
       f"Root/Tasks {uuid_hash}.csv": "Name,Score\nAlice,100",
-      f"Root/Tasks {uuid_hash}/Alice {row_uuid}.md": "# Alice\n\nhello",
+      f"Root/Tasks/Alice {row_uuid}.md": "# Alice\n\nhello",
     })
     resp = client.post(
       "/api/import/notion",

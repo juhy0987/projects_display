@@ -1451,8 +1451,9 @@ def _absorb_row_pages_into_database(
   `pages` 리스트에서 해당 row 페이지를 제거하여 중복을 제거한다.
 
   매칭 규칙:
-    - CSV 경로의 stem(UUID 해시 포함)과 동일한 이름의 자매 디렉터리에
-      위치한 페이지만 후보로 한다.
+    - Notion export 의 동반 디렉터리 이름은 CSV stem 에서 UUID 해시를
+      제거한 "깨끗한 제목"이다 (예: "자료 정리 <uuid>.csv" → "자료 정리/").
+      드물게 UUID 가 유지되는 export 도 있어 두 후보를 모두 시도한다.
     - 후보 페이지의 title == db_row 의 title 일 때 매칭으로 본다
       (Notion export 의 title 은 UUID 해시가 제거된 순수 제목).
 
@@ -1463,13 +1464,21 @@ def _absorb_row_pages_into_database(
     pages: 현재까지 파싱된 페이지 리스트. 흡수된 페이지는 제거된다.
   """
   csv_pure = PurePosixPath(csv_path)
-  companion_dir = str(csv_pure.parent / csv_pure.stem)
+  raw_stem = csv_pure.stem
+  clean_stem = re.sub(r"\s+[0-9a-f]{32}$", "", raw_stem).strip() or raw_stem
+
+  # UUID 가 제거된 이름을 우선하고, 원본 stem 도 허용한다 (Notion export
+  # 버전에 따라 달라지는 디렉터리 명명 차이에 대비).
+  companion_dirs = {
+    str(csv_pure.parent / clean_stem),
+    str(csv_pure.parent / raw_stem),
+  }
 
   # 후보: 동반 디렉터리 바로 아래에 있는 페이지만 (더 깊은 중첩은 제외)
   # — title → page (중복 title이 있을 수 있으나 Notion UUID로 분리되므로 희귀)
   title_to_page: dict[str, dict[str, Any]] = {}
   for p in pages:
-    if str(PurePosixPath(p["path"]).parent) == companion_dir:
+    if str(PurePosixPath(p["path"]).parent) in companion_dirs:
       title_to_page.setdefault(p["title"], p)
 
   if not title_to_page:
