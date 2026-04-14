@@ -1243,9 +1243,12 @@ class TestCsvParsing:
     row_titles = [r["title"] for r in db["children"]]
     assert row_titles == ["Alice", "Bob"]  # Bob 은 끝에 추가된 합성 row
     bob = next(r for r in db["children"] if r["title"] == "Bob")
-    # 합성 row 의 properties 는 컬럼 id 를 키로, 빈 값으로 채워진다
+    # 합성 row 의 properties 는 컬럼 id 를 키로, 타입별 기본값으로 채워진다
+    # (_coerce_cell_value 와 동일 규칙: text→"", number→None, checkbox→False)
     assert set(bob["properties"].keys()) == {c["id"] for c in db["columns"]}
-    assert all(v == "" for v in bob["properties"].values())
+    for col in db["columns"]:
+      expected = {"text": "", "number": None, "checkbox": False}[col["type"]]
+      assert bob["properties"][col["id"]] == expected
     # 원본 상세 블록을 children 으로 가진다
     assert any("orphan body" in b.get("text", "") for b in bob["children"])
 

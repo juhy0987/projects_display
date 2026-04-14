@@ -1513,14 +1513,20 @@ def _absorb_row_pages_into_database(
   # Notion 의 뷰 필터/이동/삭제 등으로 CSV 와 상세 페이지 수가 어긋나는
   # 경우가 있는데, 이 페이지들도 DB 영역에 속하므로 외부에 방치하지 않고
   # database 블록 내부 row 로 흡수하여 트리 정합성을 유지한다 (이슈 #69).
-  empty_properties: dict[str, Any] = {col["id"]: "" for col in db_block.get("columns", [])}
+  # 합성 db_row 의 properties 는 컬럼 타입별 기본값으로 초기화한다.
+  # `_coerce_cell_value("", type)` 은 number → None, checkbox → False,
+  # text → "" 를 돌려주므로 기존 CSV coerce 규칙과 일관성을 유지한다.
+  default_properties: dict[str, Any] = {
+    col["id"]: _coerce_cell_value("", col["type"])
+    for col in db_block.get("columns", [])
+  }
   for p in companion_pages:
     if p["path"] in consumed_paths:
       continue
     db_block["children"].append({
       "type": "db_row",
       "title": p["title"] or "Untitled",
-      "properties": dict(empty_properties),  # 각 row 는 독립 dict 참조 유지
+      "properties": dict(default_properties),  # 각 row 는 독립 dict 참조 유지
       "children": p["blocks"],
     })
     consumed_paths.add(p["path"])
