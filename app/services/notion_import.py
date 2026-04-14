@@ -1484,9 +1484,13 @@ def _absorb_row_pages_into_database(
   if not title_to_page:
     return
 
+  # 각 row 페이지는 정확히 하나의 db_row 에만 흡수되어야 한다.
+  # (같은 list 참조를 여러 db_row.children 에 할당하면, 영속화 시 동일한
+  #  block dict 들이 여러 번 INSERT 되어 `blocks.id` UNIQUE 제약이 깨진다.)
+  # `pop` 으로 매칭 후보에서 제거하여 중복 흡수를 방지한다.
   consumed_paths: set[str] = set()
   for db_row in db_block["children"]:
-    matched = title_to_page.get(db_row["title"])
+    matched = title_to_page.pop(db_row["title"], None)
     if matched is None:
       continue
     # row 페이지의 blocks 를 db_row 의 children 으로 이전한다.

@@ -1153,6 +1153,39 @@ class TestCsvParsing:
       for b in rows_by_title["범진님이 주신 팁"]["children"]
     )
 
+  def test_duplicate_row_titles_do_not_share_block_ids(self):
+    """같은 title 의 db_row 가 여러 개여도 block id 가 중복되지 않는다.
+
+    각 row 페이지는 최대 하나의 db_row 에만 흡수되어야 한다
+    (pop 기반 1:1 매칭). list 참조 공유는 영속화 시 UNIQUE 제약 충돌을
+    일으키므로 block id 집합 중복이 없음을 검증한다.
+    """
+    from collections import Counter
+
+    uuid_hash = "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+    row_uuid_a = "11111111111111111111111111111111"
+    # CSV 에 같은 title 이 두 번 등장 (Notion 에서는 드물지만 가능)
+    csv_body = "Name,Status\nDup,Done\nDup,Todo"
+    zip_data = _make_zip({
+      "Root/page.md": f"# P\n\n- [T](T%20{uuid_hash}.csv)",
+      f"Root/T {uuid_hash}.csv": csv_body,
+      f"Root/T/Dup {row_uuid_a}.md": "# Dup\n\nOnly one detail page",
+    })
+    result = extract_and_parse_zip(zip_data)
+
+    ids: list[str] = []
+    def walk(bs):
+      for b in bs:
+        if b.get("id"):
+          ids.append(b["id"])
+        for c in b.get("children") or []:
+          walk([c])
+    for p in result.pages:
+      walk(p["blocks"])
+    assert not [k for k, v in Counter(ids).items() if v > 1], (
+      "파싱 결과에 동일 block id 가 중복 등장해선 안 된다"
+    )
+
   def test_row_pages_merged_end_to_end(self, client):
     """API 전체 플로우: row 페이지가 db_row 에만 존재하고 트리에 중복되지 않는다."""
     uuid_hash = "cccccccccccccccccccccccccccccccc"
