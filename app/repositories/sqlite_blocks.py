@@ -463,8 +463,53 @@ class SQLiteBlockRepository:
         block_type = block["type"]
         children = block.pop("children", None)
 
-        # content_json — id/type 컬럼은 제외
-        content = {k: v for k, v in block.items() if k not in ("id", "type")}
+        # ── db_row: 각 행은 독립 DocumentRow를 갖는 "페이지형 블록"이다.
+        #   (이슈 #69: Notion 데이터베이스의 레코드/페이지 개념 매핑)
+        #   - source_block_id로 DocumentRow ↔ db_row BlockRow를 연결해
+        #     `list_tree()`에서 가상 database 노드를 복원할 수 있게 한다.
+        #   - 행 본문(children)은 부모 database 문서가 아닌 해당 행의
+        #     자식 문서에 속하므로 스택 push 시 doc_id를 교체한다.
+        if block_type == "db_row":
+          row_title = (block.get("title") or "").strip() or "Untitled"
+          properties = block.get("properties", {}) or {}
+          child_doc_id = str(uuid.uuid4())
+          self._session.add(DocumentRow(
+            id=child_doc_id,
+            title=row_title,
+            subtitle="",
+            parent_id=doc_id,
+            source_block_id=block_id,
+          ))
+          content = {
+            "document_id": child_doc_id,
+            "is_reference": False,
+            "properties": properties,
+          }
+          next_pos = self._next_position(cursor_key, position_cursor)
+          self._session.add(BlockRow(
+            id=block_id,
+            document_id=doc_id,
+            parent_block_id=parent_block_id,
+            type=block_type,
+            position=next_pos,
+            content_json=json.dumps(content, ensure_ascii=False),
+          ))
+          if children:
+            stack.append((child_doc_id, None, children))
+          continue
+
+        # ── database: title/color/columns만 content_json에 저장. 행(db_row)은
+        #   children으로 전달되어 같은 database 블록의 자식으로 영속화된다.
+        if block_type == "database":
+          content = {
+            "title": block.get("title", ""),
+            "color": block.get("color", "default"),
+            "columns": block.get("columns", []),
+          }
+        else:
+          # content_json — id/type 컬럼은 제외
+          content = {k: v for k, v in block.items() if k not in ("id", "type")}
+
         next_pos = self._next_position(cursor_key, position_cursor)
 
         self._session.add(BlockRow(
