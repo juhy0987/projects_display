@@ -893,6 +893,38 @@ class TestNestedZip:
     assert len(result.pages) == 1
     assert result.pages[0]["title"] == "Test Page"
 
+  def test_crc_corrupted_zip_entry_recovers(self, monkeypatch):
+    """CRC 검증 실패 엔트리도 우회해서 추출합니다.
+
+    Notion export ZIP에서 종종 발생하는 CRC mismatch 케이스에 대한 fallback.
+    """
+    import zipfile as zf_mod
+    from app.services import notion_import as ni
+
+    inner_buf = io.BytesIO()
+    with zipfile.ZipFile(inner_buf, "w") as zf:
+      zf.writestr("page.md", "# CRC Test\n\nContent")
+    outer_buf = io.BytesIO()
+    with zipfile.ZipFile(outer_buf, "w") as zf:
+      zf.writestr("Part-1.zip", inner_buf.getvalue())
+
+    # 첫 번째 zf.read() 호출에서 BadZipFile(CRC) 예외를 발생시킨다
+    original_read = zf_mod.ZipFile.read
+    call_count = {"n": 0}
+
+    def fake_read(self, name, pwd=None):
+      call_count["n"] += 1
+      if call_count["n"] == 1:
+        raise zf_mod.BadZipFile(f"Bad CRC-32 for file {name!r}")
+      return original_read(self, name, pwd)
+
+    monkeypatch.setattr(zf_mod.ZipFile, "read", fake_read)
+
+    # CRC 우회 경로가 발동되어도 정상 추출되어야 함
+    result = ni.extract_and_parse_zip(outer_buf.getvalue())
+    assert len(result.pages) == 1
+    assert result.pages[0]["title"] == "CRC Test"
+
   def test_nested_zip_with_images(self):
     """이중 ZIP에서 이미지를 추출합니다."""
     fake_png = b"\x89PNG" + b"\x00" * 50

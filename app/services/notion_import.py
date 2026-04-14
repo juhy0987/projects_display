@@ -657,6 +657,35 @@ class ImportResult:
   image_mappings: dict[str, bytes]  # 상대경로 → 이미지 바이트 데이터
 
 
+def _read_zip_entry(zf: zipfile.ZipFile, name: str) -> bytes:
+  """ZIP 엔트리를 읽습니다. CRC 검증 실패 시 검증을 건너뛰고 재시도합니다.
+
+  Notion export ZIP은 일부 환경에서 CRC-32 헤더 값과 실제 데이터가 불일치하는
+  경우가 있어 (`unzip -t`는 OK이지만 Python zipfile은 거부) 표준 read가
+  BadZipFile을 던질 수 있습니다. 이런 경우 안전하게 CRC 검증 없이 데이터를
+  추출합니다.
+
+  Ref: Python issue tracker — zipfile strict CRC validation
+  """
+  try:
+    return zf.read(name)
+  except zipfile.BadZipFile as exc:
+    if "CRC-32" not in str(exc):
+      raise
+    logger.warning("CRC 검증 실패, 검증 우회 후 재시도: %s", name)
+
+  # CRC 검증을 건너뛰는 대체 경로 — ZipExtFile 내부 _expected_crc를 None으로 설정
+  with zf.open(name) as src:
+    src._expected_crc = None  # type: ignore[attr-defined]
+    chunks: list[bytes] = []
+    while True:
+      chunk = src.read(1024 * 1024)
+      if not chunk:
+        break
+      chunks.append(chunk)
+    return b"".join(chunks)
+
+
 def _flatten_zip(zip_data: bytes) -> dict[str, bytes]:
   """ZIP 파일 내 모든 파일을 추출합니다. 내부 ZIP도 재귀적으로 해제합니다.
 
@@ -683,12 +712,19 @@ def _flatten_zip(zip_data: bytes) -> dict[str, bytes]:
       if name.endswith("/") or "__MACOSX" in name:
         continue
 
-      data = zf.read(name)
+      try:
+        data = _read_zip_entry(zf, name)
+      except Exception as exc:
+        logger.error("ZIP 엔트리 읽기 실패: %s — %s", name, exc)
+        continue
 
       # 내부 ZIP 파일 감지 → 재귀 추출
       if name.lower().endswith(".zip") and zipfile.is_zipfile(BytesIO(data)):
-        inner = _flatten_zip(data)
-        result.update(inner)
+        try:
+          inner = _flatten_zip(data)
+          result.update(inner)
+        except Exception as exc:
+          logger.error("내부 ZIP 추출 실패: %s — %s", name, exc)
       else:
         result[name] = data
 
