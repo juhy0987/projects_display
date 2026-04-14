@@ -1186,6 +1186,64 @@ class TestCsvParsing:
       "파싱 결과에 동일 block id 가 중복 등장해선 안 된다"
     )
 
+  def test_duplicate_title_pages_all_absorbed(self):
+    """CSV 에 동일 title 의 row 가 여러 개이면 해당 수만큼 페이지가 흡수된다.
+
+    기존 setdefault 로직은 첫 페이지만 매칭되어 나머지가 잔류했다.
+    Notion 회의록 DB 의 "백엔드 정기 멘토링" 처럼 반복되는 이름에 대응.
+    """
+    uuid_hash = "f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0"
+    uuid_a = "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+    uuid_b = "a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2"
+    uuid_c = "a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3"
+    csv_body = "Name,When\nMtg,D1\nMtg,D2\nMtg,D3"
+    zip_data = _make_zip({
+      "Root/page.md": f"# P\n\n- [M](M%20{uuid_hash}.csv)",
+      f"Root/M {uuid_hash}.csv": csv_body,
+      f"Root/M/Mtg {uuid_a}.md": "# Mtg\n\nalpha",
+      f"Root/M/Mtg {uuid_b}.md": "# Mtg\n\nbravo",
+      f"Root/M/Mtg {uuid_c}.md": "# Mtg\n\ncharlie",
+    })
+    result = extract_and_parse_zip(zip_data)
+    # 잔류 없음
+    assert not [p for p in result.pages if p["title"] == "Mtg"]
+    # 세 db_row 모두 고유 상세 블록을 가진다
+    db = next(b for p in result.pages for b in p["blocks"] if b.get("type") == "database")
+    texts = []
+    for row in db["children"]:
+      for child in row["children"]:
+        if child.get("type") == "text":
+          texts.append(child.get("text", ""))
+    assert {"alpha", "bravo", "charlie"} <= set(texts)
+
+  def test_orphan_companion_pages_promoted_to_db_rows(self):
+    """CSV 에 대응 row 가 없는 동반 디렉터리 페이지도 합성 db_row 로 승격된다.
+
+    Notion 의 뷰 필터/이동 등으로 CSV 와 상세 페이지 수가 어긋날 수 있다.
+    이런 orphan 도 DB 영역 외부로 새지 않고 database 블록 내부 row 로 흡수해야 한다.
+    """
+    uuid_hash = "b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0"
+    orphan_uuid = "c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0"
+    csv_body = "Name,Tag\nAlice,x"  # Bob 없음
+    zip_data = _make_zip({
+      "Root/page.md": f"# P\n\n- [D](D%20{uuid_hash}.csv)",
+      f"Root/D {uuid_hash}.csv": csv_body,
+      f"Root/D/Alice {orphan_uuid}.md": "# Alice\n\nhello",
+      f"Root/D/Bob {orphan_uuid[::-1]}.md": "# Bob\n\norphan body",
+    })
+    result = extract_and_parse_zip(zip_data)
+    # 잔류 페이지 없음
+    assert not [p for p in result.pages if p["title"] in ("Alice", "Bob")]
+    db = next(b for p in result.pages for b in p["blocks"] if b.get("type") == "database")
+    row_titles = [r["title"] for r in db["children"]]
+    assert row_titles == ["Alice", "Bob"]  # Bob 은 끝에 추가된 합성 row
+    bob = next(r for r in db["children"] if r["title"] == "Bob")
+    # 합성 row 의 properties 는 컬럼 id 를 키로, 빈 값으로 채워진다
+    assert set(bob["properties"].keys()) == {c["id"] for c in db["columns"]}
+    assert all(v == "" for v in bob["properties"].values())
+    # 원본 상세 블록을 children 으로 가진다
+    assert any("orphan body" in b.get("text", "") for b in bob["children"])
+
   def test_row_pages_merged_end_to_end(self, client):
     """API 전체 플로우: row 페이지가 db_row 에만 존재하고 트리에 중복되지 않는다."""
     uuid_hash = "cccccccccccccccccccccccccccccccc"

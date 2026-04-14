@@ -1474,29 +1474,50 @@ def _absorb_row_pages_into_database(
     str(csv_pure.parent / raw_stem),
   }
 
-  # 후보: 동반 디렉터리 바로 아래에 있는 페이지만 (더 깊은 중첩은 제외)
-  # — title → page (중복 title이 있을 수 있으나 Notion UUID로 분리되므로 희귀)
-  title_to_page: dict[str, dict[str, Any]] = {}
+  # 후보: 동반 디렉터리 바로 아래에 있는 페이지만 (더 깊은 중첩은 제외).
+  # Notion 은 동일 title 의 row 를 여러 개 허용하므로(예: "백엔드 정기
+  # 멘토링" 이 CSV 에 3번 등장) title 당 복수 페이지를 FIFO 로 관리한다.
+  # (기존 setdefault 방식은 첫 페이지만 매칭되어 나머지가 잔류했다.)
+  from collections import defaultdict, deque
+  title_bucket: dict[str, deque[dict[str, Any]]] = defaultdict(deque)
+  companion_pages: list[dict[str, Any]] = []
   for p in pages:
     if str(PurePosixPath(p["path"]).parent) in companion_dirs:
-      title_to_page.setdefault(p["title"], p)
+      title_bucket[p["title"]].append(p)
+      companion_pages.append(p)
 
-  if not title_to_page:
+  if not companion_pages:
     return
 
   # 각 row 페이지는 정확히 하나의 db_row 에만 흡수되어야 한다.
   # (같은 list 참조를 여러 db_row.children 에 할당하면, 영속화 시 동일한
   #  block dict 들이 여러 번 INSERT 되어 `blocks.id` UNIQUE 제약이 깨진다.)
-  # `pop` 으로 매칭 후보에서 제거하여 중복 흡수를 방지한다.
   consumed_paths: set[str] = set()
   for db_row in db_block["children"]:
-    matched = title_to_page.pop(db_row["title"], None)
-    if matched is None:
+    bucket = title_bucket.get(db_row["title"])
+    if not bucket:
       continue
+    matched = bucket.popleft()
     # row 페이지의 blocks 를 db_row 의 children 으로 이전한다.
     # (db_row 는 PageBlock 파생이므로 자체 문서에 블록이 속한다)
     db_row["children"] = matched["blocks"]
     consumed_paths.add(matched["path"])
+
+  # CSV 에 대응 row 가 없는 잔여 동반 페이지는 "합성 db_row" 로 승격한다.
+  # Notion 의 뷰 필터/이동/삭제 등으로 CSV 와 상세 페이지 수가 어긋나는
+  # 경우가 있는데, 이 페이지들도 DB 영역에 속하므로 외부에 방치하지 않고
+  # database 블록 내부 row 로 흡수하여 트리 정합성을 유지한다 (이슈 #69).
+  empty_properties: dict[str, Any] = {col["id"]: "" for col in db_block.get("columns", [])}
+  for p in companion_pages:
+    if p["path"] in consumed_paths:
+      continue
+    db_block["children"].append({
+      "type": "db_row",
+      "title": p["title"] or "Untitled",
+      "properties": dict(empty_properties),  # 각 row 는 독립 dict 참조 유지
+      "children": p["blocks"],
+    })
+    consumed_paths.add(p["path"])
 
   if consumed_paths:
     pages[:] = [p for p in pages if p["path"] not in consumed_paths]
