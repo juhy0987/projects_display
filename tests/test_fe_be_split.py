@@ -27,15 +27,26 @@ def test_health_endpoint_returns_ok(client):
   assert res.json() == {"status": "ok"}
 
 
-def test_static_uploads_mount_exists(client, tmp_path, monkeypatch):
+def test_static_uploads_mount_serves_file(client, tmp_path):
   """업로드 이미지는 be 의 /static/uploads 로 계속 서빙되어야 한다.
 
-  실제 파일을 생성하지 않고 404 여부만 검사한다 (마운트 존재 시 404, 미마운트 시 405/404 혼재).
-  StaticFiles 는 없는 파일에 대해 404 를 반환한다.
+  임시 파일을 static/uploads 에 생성한 뒤 200 응답과 내용을 검증한다.
+  404 만으로는 '라우트 없음'과 'StaticFiles 마운트 내 파일 없음'을 구분할 수 없으므로,
+  실제 파일을 조회해 마운트가 올바르게 동작하는지 확인한다.
   (Ref: https://www.starlette.io/staticfiles/)
   """
-  res = client.get("/static/uploads/__does_not_exist__.webp")
-  assert res.status_code == 404
+  from main import BASE_DIR
+
+  uploads_dir = BASE_DIR / "static" / "uploads"
+  uploads_dir.mkdir(parents=True, exist_ok=True)
+  test_file = uploads_dir / "__test_probe__.txt"
+  test_file.write_text("probe")
+  try:
+    res = client.get("/static/uploads/__test_probe__.txt")
+    assert res.status_code == 200
+    assert res.text == "probe"
+  finally:
+    test_file.unlink(missing_ok=True)
 
 
 def test_cors_preflight_allows_configured_origin(client):
@@ -64,6 +75,36 @@ def test_cors_rejects_unknown_origin(client):
   )
   # CORSMiddleware 는 미허용 오리진에 대해 Allow-Origin 헤더를 생략한다.
   assert res.headers.get("access-control-allow-origin") != "http://evil.example"
+
+
+def test_cors_wildcard_origin_fallback(monkeypatch):
+  """FE_ALLOWED_ORIGINS 에 와일드카드(*)가 포함되면 기본 오리진으로 폴백해야 한다.
+
+  allow_credentials=True 와 allow_origins=["*"] 조합은 CORS 스펙에 위배되어
+  Starlette CORSMiddleware 가 RuntimeError 를 발생시킨다. 이를 방어하기 위해
+  와일드카드 입력 시 기본값으로 대체하는 로직을 검증한다.
+  (Ref: https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS#credentialed_requests_and_wildcards)
+  """
+  monkeypatch.setenv("FE_ALLOWED_ORIGINS", "*")
+
+  import importlib
+  import main as main_module
+  importlib.reload(main_module)
+  try:
+    from fastapi.testclient import TestClient
+    with TestClient(main_module.app) as c:
+      res = c.options(
+        "/api/health",
+        headers={
+          "Origin": "http://localhost:5173",
+          "Access-Control-Request-Method": "GET",
+        },
+      )
+      assert res.status_code == 200
+      assert res.headers.get("access-control-allow-origin") == "http://localhost:5173"
+  finally:
+    monkeypatch.delenv("FE_ALLOWED_ORIGINS", raising=False)
+    importlib.reload(main_module)
 
 
 def test_be_has_no_templates_directory():
