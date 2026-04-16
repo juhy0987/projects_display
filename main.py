@@ -26,6 +26,12 @@ _allow_origins = [
   for o in os.environ.get("FE_ALLOWED_ORIGINS", _DEFAULT_ORIGINS).split(",")
   if o.strip()
 ]
+# allow_credentials=True 와 와일드카드("*") 오리진은 CORS 스펙상 동시에 사용할 수
+# 없으며, Starlette CORSMiddleware 는 RuntimeError 를 발생시킨다.
+# 운영 실수(FE_ALLOWED_ORIGINS=*)를 방어하기 위해 와일드카드가 감지되면 기본값으로
+# 폴백한다. (Ref: https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS#credentialed_requests_and_wildcards)
+if "*" in _allow_origins:
+  _allow_origins = [o.strip() for o in _DEFAULT_ORIGINS.split(",") if o.strip()]
 app.add_middleware(
   CORSMiddleware,
   allow_origins=_allow_origins,
@@ -34,7 +40,12 @@ app.add_middleware(
   allow_headers=["*"],
 )
 
-app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
+# 신규 배포 환경에서 static/ 디렉터리가 아직 생성되지 않았을 수 있다.
+# StaticFiles 는 디렉터리 부재 시 RuntimeError 를 발생시키므로 선제 생성한다.
+# (Ref: https://www.starlette.io/staticfiles/)
+_static_dir = BASE_DIR / "static"
+_static_dir.mkdir(parents=True, exist_ok=True)
+app.mount("/static", StaticFiles(directory=_static_dir), name="static")
 
 app.include_router(auth.router)
 app.include_router(documents.router)
