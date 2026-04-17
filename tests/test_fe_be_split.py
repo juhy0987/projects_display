@@ -27,7 +27,7 @@ def test_health_endpoint_returns_ok(client):
   assert res.json() == {"status": "ok"}
 
 
-def test_static_uploads_mount_serves_file(client, tmp_path):
+def test_static_uploads_mount_serves_file(client):
   """업로드 이미지는 be 의 /static/uploads 로 계속 서빙되어야 한다.
 
   임시 파일을 static/uploads 에 생성한 뒤 200 응답과 내용을 검증한다.
@@ -73,8 +73,12 @@ def test_cors_rejects_unknown_origin(client):
       "Access-Control-Request-Method": "GET",
     },
   )
-  # CORSMiddleware 는 미허용 오리진에 대해 Allow-Origin 헤더를 생략한다.
-  assert res.headers.get("access-control-allow-origin") != "http://evil.example"
+  # Starlette CORSMiddleware 는 미허용 오리진에 대해 Allow-Origin 헤더 자체를
+  # 응답에 포함하지 않는다. 단순 != 비교는 "*" 등 잘못된 값 누출을 감지하지 못하므로,
+  # 헤더 부재를 명시적으로 확인한다.
+  # (Ref: https://github.com/encode/starlette/blob/master/starlette/middleware/cors.py)
+  assert "access-control-allow-origin" not in res.headers
+  assert res.status_code == 400
 
 
 def test_cors_wildcard_origin_fallback(monkeypatch):
