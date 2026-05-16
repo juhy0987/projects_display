@@ -17,3 +17,5 @@ wheels/
 data/
 uploads/
 static/files/
+
+.claude/settings.local.json
