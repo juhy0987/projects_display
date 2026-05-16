@@ -1,3 +1,25 @@
-# 모든 파일 변경 시 GitHub Copilot이 자동으로 코드 리뷰어로 지정됩니다.
-# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
-* @github-copilot
+# CODEOWNERS
+#
+# 의도적으로 전역 `*` 패턴을 두지 않습니다.
+#   - "Require review from Code Owners" 와 결합 시 전역 `*` 는
+#     저장소의 모든 PR 이 단일 소유자 승인에 종속되어 머지 병목을 유발합니다.
+#   - 보호가 필요한 핵심 경로만 명시적으로 나열합니다.
+#
+# TODO(juhy0987): 팀이 생기면 이중 owner 로 전환하세요.
+
+# 거버넌스 / CI / 워크플로
+/.github/                       @juhy0987
+
+# CI 운영 문서
+/docs/ci/                       @juhy0987
+
+# 의존성 / 공급망
+/pyproject.toml                 @juhy0987
+/uv.lock                        @juhy0987
+
+# 앱 코어 (FastAPI 라우터 / 모델 / repository)
+/app/                           @juhy0987
+/main.py                        @juhy0987
+
+# 인증
+/app/auth/                      @juhy0987

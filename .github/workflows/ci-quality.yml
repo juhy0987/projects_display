@@ -1,0 +1,77 @@
+name: CI - Quality
+
+# Python / FastAPI 코드 품질 검사 워크플로
+# Convention 검증(커밋·PR 타이틀 형식)은 ci-convention.yml 에 분리되어 있습니다.
+# job `name:` 값은 GitHub Required Status Check 컨텍스트로 사용되므로 변경 금지
+# (docs/ci/status-checks.md 단일 소스 참조).
+
+on:
+  pull_request:
+    branches: ["**"]
+
+jobs:
+  format:
+    name: Format Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Sync dependencies
+        run: uv sync
+
+      - name: Check indentation (2 spaces)
+        run: |
+          # 들여쓰기 2칸 강제 — 4칸 들여쓰기 라인 발견 시 실패
+          # ruff/black 등 자동 포맷 도구 도입 전 임시 가드
+          offenders=$(grep -RlnP '^    [^ ]' --include='*.py' app main.py tests 2>/dev/null || true)
+          if [ -n "$offenders" ]; then
+            {
+              echo "## ❌ Format Check 실패"
+              echo "다음 파일에 4-space 들여쓰기 라인이 존재합니다 (프로젝트 규칙: 2-space):"
+              echo ""
+              echo '```'
+              echo "$offenders"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          echo "## ✅ Format Check 통과" >> "$GITHUB_STEP_SUMMARY"
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Sync dependencies
+        run: uv sync --all-extras
+
+      - name: Run pytest
+        run: uv run pytest
+
+      - name: Report
+        if: ${{ !cancelled() }}
+        run: |
+          echo "## ✅ Test 잡 완료" >> "$GITHUB_STEP_SUMMARY"

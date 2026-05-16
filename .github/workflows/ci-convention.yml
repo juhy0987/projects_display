@@ -1,0 +1,185 @@
+name: CI - Convention
+
+# PR 메타데이터(커밋 메시지 / PR 타이틀) 형식 강제 워크플로
+# 코드 빌드·테스트와는 독립적으로 운영합니다.
+# job `name:` 값은 GitHub Required Status Check 컨텍스트로 사용되므로 변경 금지
+# (docs/ci/status-checks.md 단일 소스 참조).
+
+on:
+  pull_request:
+    branches: ["**"]
+
+jobs:
+  commit-lint:
+    name: Commit Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate commit messages
+        run: |
+          pattern='^\[(FEAT|FIX|REFAC|DOCS|CHORE|TEST)\]'
+
+          # --no-merges: 자동 생성된 머지 커밋은 검사 대상에서 제외.
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            base="${{ github.event.pull_request.base.sha }}"
+            head="${{ github.event.pull_request.head.sha }}"
+            commits=$(git log --no-merges --format='%s' "$base".."$head")
+          else
+            commits=$(git log --no-merges --format='%s' -1)
+          fi
+
+          failed=0
+          while IFS= read -r msg; do
+            [ -z "$msg" ] && continue
+            if ! echo "$msg" | grep -qE "$pattern"; then
+              echo "::error::커밋 메시지 규칙 위반: '$msg'"
+              echo "  허용 형식: [FEAT]: / [FIX]: / [REFAC]: / [DOCS]: / [CHORE]: / [TEST]:"
+              failed=1
+            fi
+          done <<< "$commits"
+
+          if [ "$failed" -eq 1 ]; then
+            {
+              echo "## ❌ Commit Lint 실패"
+              echo "커밋 메시지가 \`[카테고리]: 설명\` 형식을 따르지 않습니다."
+              echo ""
+              echo "허용 카테고리: \`FEAT\` \`FIX\` \`REFAC\` \`DOCS\` \`CHORE\` \`TEST\`"
+              echo ""
+              echo "예시: \`[FIX]: 슬래시 커맨드 블록 변경 시 content_json 누락 보정\`"
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+          echo "## ✅ Commit Lint 통과" >> "$GITHUB_STEP_SUMMARY"
+
+  pr-title-lint:
+    name: PR Title Lint
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate PR title
+        run: |
+          title="${{ github.event.pull_request.title }}"
+          # [카테고리#이슈번호] 제목  또는  [카테고리#이슈번호]: 제목
+          pattern='^\[(FEAT|FIX|REFAC|DOCS|CHORE|TEST)#[0-9]+\]:?[ ]+[^[:space:]].*$'
+
+          if ! echo "$title" | grep -qE "$pattern"; then
+            {
+              echo "## ❌ PR Title Lint 실패"
+              echo "PR 타이틀이 \`[카테고리#이슈번호] 설명\` 엄격 형식을 따르지 않습니다."
+              echo ""
+              echo "현재 타이틀: \`$title\`"
+              echo ""
+              echo "허용 카테고리: \`FEAT\` \`FIX\` \`REFAC\` \`DOCS\` \`CHORE\` \`TEST\`"
+              echo ""
+              echo "**통과 예시:**"
+              echo "- \`[FEAT#2] 슬래시 커맨드 블록 추가 팔레트 구현\`"
+              echo "- \`[FEAT#2]: 슬래시 커맨드 블록 추가 팔레트 구현\` (콜론 형태도 허용)"
+              echo "- \`[FIX#15]: 이미지 업로드 MIME 검증 강화\`"
+              echo ""
+              echo "**거부 예시:**"
+              echo "- \`[FEAT]: 이슈번호 누락\` (\`#이슈번호\` 필수)"
+              echo "- \`[FEAT 2]: # 대신 공백\`"
+              echo "- \`[FEAT#abc]: 숫자 아닌 이슈번호\`"
+              echo "- \`feat#1: 소문자\` (대문자만 허용)"
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+          echo "## ✅ PR Title Lint 통과" >> "$GITHUB_STEP_SUMMARY"
+
+  linked-issue:
+    name: Linked Issue Check
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: read
+    steps:
+      - name: Skip for allowlisted automation accounts
+        id: bot_allowlist
+        env:
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+        run: |
+          allowlist='dependabot[bot]'
+          skipped=false
+          for entry in $allowlist; do
+            if [ "$PR_AUTHOR" = "$entry" ]; then
+              skipped=true
+              break
+            fi
+          done
+
+          echo "skipped=$skipped" >> "$GITHUB_OUTPUT"
+
+          if [ "$skipped" = "true" ]; then
+            {
+              echo "## ⏭️ Linked Issue Check 건너뜀"
+              echo "PR 작성자 \`$PR_AUTHOR\` 는 허용된 자동화 계정 (conventions.md 부록 A)."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Verify PR is linked to a closing issue reference
+        if: steps.bot_allowlist.outputs.skipped != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_OWNER: ${{ github.event.pull_request.base.repo.owner.login }}
+          PR_REPO: ${{ github.event.pull_request.base.repo.name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+
+          response=$(gh api graphql \
+            -F owner="$PR_OWNER" \
+            -F repo="$PR_REPO" \
+            -F number="$PR_NUMBER" \
+            -f query='
+              query($owner:String!, $repo:String!, $number:Int!) {
+                repository(owner:$owner, name:$repo) {
+                  pullRequest(number:$number) {
+                    closingIssuesReferences(first: 20) {
+                      totalCount
+                      nodes { number title state }
+                    }
+                  }
+                }
+              }
+            ')
+
+          errors=$(echo "$response" | jq -c '.errors // empty')
+          if [ -n "$errors" ]; then
+            {
+              echo "## ❌ Linked Issue Check 실패 (GraphQL 에러)"
+              echo '```json'
+              echo "$errors"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+          total=$(echo "$response" | jq '.data.repository.pullRequest.closingIssuesReferences.totalCount // 0')
+
+          if [ "$total" -eq 0 ]; then
+            {
+              echo "## ❌ Linked Issue Check 실패"
+              echo "이 PR 에 머지 시 close 될 이슈(closing reference) 가 연결되어 있지 않습니다."
+              echo ""
+              echo "다음 중 하나의 방법으로 closing reference 를 추가하세요:"
+              echo "1. PR 본문에 GitHub closing 키워드 추가 — \`Closes #이슈번호\` / \`Fixes #이슈번호\` / \`Resolves #이슈번호\`"
+              echo "2. PR 사이드바의 \`Development\` 섹션에서 이슈 링크 시 \`Will close this issue when merged\` 옵션 체크"
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+          shown=$(echo "$response" | jq '.data.repository.pullRequest.closingIssuesReferences.nodes | length')
+          {
+            echo "## ✅ Linked Issue Check 통과"
+            echo ""
+            echo "머지 시 close 될 이슈 ${total}건 (상위 ${shown}건 표시):"
+            echo "$response" | jq -r '.data.repository.pullRequest.closingIssuesReferences.nodes[] | "- #\(.number) \(.title) (\(.state))"'
+          } >> "$GITHUB_STEP_SUMMARY"

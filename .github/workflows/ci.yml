@@ -1,10 +1,11 @@
-name: CI
+name: CI (main)
+
+# main 브랜치 머지 직후 회귀 확인용 sanity-check.
+# PR 단위 빌드/테스트는 ci-quality.yml 이 담당하므로 여기서는 push 만 트리거한다.
 
 on:
   push:
     branches: [main]
-  pull_request:
-    types: [opened, synchronize, reopened]
 
 jobs:
   test:
